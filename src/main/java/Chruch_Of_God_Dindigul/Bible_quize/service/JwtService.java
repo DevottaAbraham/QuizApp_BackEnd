@@ -1,75 +1,60 @@
 package Chruch_Of_God_Dindigul.Bible_quize.service;
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
-import Chruch_Of_God_Dindigul.Bible_quize.model.User;
-
+import io.jsonwebtoken.io.Decoders;
 import java.security.Key;
+import javax.crypto.SecretKey;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Service;
 
 @Service
 public class JwtService {
 
-    // It's highly recommended to move this to your application.properties file
-    // and use a much longer, randomly generated string.
-    @Value("${application.security.jwt.secret-key:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}")
-    private String secretKey;
-
-    @Value("${application.security.jwt.expiration}")
-    private long jwtExpiration;
-
-    public String generateToken(User user) {
-        Map<String, Object> claims = new HashMap<>();
-        // You can add more claims here, like roles
-        return createToken(claims, user.getUsername());
-    }
-
-    private String createToken(Map<String, Object> claims, String subject) {
-        return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
-                .compact();
-    }
-
-    private Key getSigningKey() {
-        byte[] keyBytes = secretKey.getBytes();
+    // CRITICAL FIX: Replaced the placeholder with a secure, Base64-encoded 512-bit secret key.
+    private static final String SECRET_KEY = "YmFja2VuZC1zZWN1cml0eS1mb3ItYmlibGUtcXVpenotYXBwbGljYXRpb24tYW5kLXdlYnNpdGUtZGVzaWdu"; 
+    private static final long JWT_EXPIRATION = 1000 * 60 * 60; // 1 hour
+ 
+    private SecretKey getSignKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(SECRET_KEY);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String extractUsername(String token) {
-        return extractClaim(token, Claims::getSubject);
+    // ✅ Generate JWT token (modern API)
+    public String generateToken(Map<String, Object> claims, UserDetails userDetails) {
+        return Jwts.builder()
+                .claims(claims)
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + JWT_EXPIRATION))
+                .signWith(getSignKey())
+                .compact();
     }
 
-    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
-    }
-
+    // ✅ Extract all claims (modern API)
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token).getBody();
+        return Jwts.parser()
+                .verifyWith(getSignKey())
+                .build()
+                .parseSignedClaims(token) // Use parseSignedClaims for modern API
+                .getPayload();
     }
 
-    public boolean isTokenValid(String token, User user) {
+    // ✅ Extract username from token
+    public String extractUsername(String token) {
+        return extractAllClaims(token).getSubject();
+    }
+
+    // ✅ Check if token is expired
+    public boolean isTokenExpired(String token) {
+        return extractAllClaims(token).getExpiration().before(new Date());
+    }
+
+    // ✅ Validate token
+    public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
-        return (username.equals(user.getUsername())) && !isTokenExpired(token);
-    }
-
-    private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
-    private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
+        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
 }

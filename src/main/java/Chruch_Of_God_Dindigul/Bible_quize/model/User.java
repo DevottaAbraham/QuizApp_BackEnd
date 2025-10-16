@@ -1,25 +1,30 @@
 package Chruch_Of_God_Dindigul.Bible_quize.model;
 
-import java.util.Collection;
-import java.util.Collections;
-
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.List;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
-@Table(name = "users") // Use "users" as "user" is often a reserved keyword in SQL
+@Table(name = "users") // Ensure this matches your table name
 public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true, nullable = false)
     private String username;
 
     @Column(nullable = false)
@@ -29,10 +34,29 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role;
 
+    /**
+     * This is the critical method that provides the user's role to Spring Security.
+     * It must return a collection of GrantedAuthority objects.
+     */
+public Collection<? extends GrantedAuthority> getAuthorities() {
+
+    // The role must be prefixed with "ROLE_" for Spring Security's hasRole() check to work,
+    // and to match our hasAuthority("ROLE_ADMIN") rule.
+    return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+}
+
     @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.name()));
+    public String getPassword() {
+        return password;
     }
+
+    @Override
+    public String getUsername() {
+        return username;
+    }
+
+    // The following methods are part of the UserDetails interface.
+    // For this application, we can return true for all of them.
 
     @Override
     public boolean isAccountNonExpired() {
@@ -53,5 +77,5 @@ public class User implements UserDetails {
     public boolean isEnabled() {
         return true;
     }
-}
 
+}

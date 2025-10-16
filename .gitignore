@@ -26,3 +26,4 @@ Thumbs.db
 node_modules/
 bin/
 .env
+.pom.xml.tag

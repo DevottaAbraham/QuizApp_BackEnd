@@ -8,4 +8,6 @@ public class RegistrationRequest {
     private String username;
     private String password;
     private Role role;
+    // This field must match the JSON key sent from the frontend ('adminSetupToken')
+    private String adminSetupToken;
 }

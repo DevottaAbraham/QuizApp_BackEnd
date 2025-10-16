@@ -12,19 +12,34 @@ public class Question {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 1024)
-    private String text;
+    // English fields
+    @Column(name = "text_en", nullable = false, length = 1024)
+    private String text_en;
 
-    // In a real application, you might use a more structured type like a JSONB column
-    // or a separate Options entity. For simplicity, we'll use a simple text field.
-    @Column(columnDefinition = "TEXT")
-    private String options; // e.g., "[\"Option A\", \"Option B\", \"Option C\"]"
+    @Column(name = "options_en", columnDefinition = "TEXT")
+    private String options_en; // JSON array of strings
 
-    @Column(name = "correct_answer", nullable = false)
-    private int correctAnswer; // Index of the correct answer
+    @Column(name = "correct_answer_en", nullable = false)
+    private String correctAnswer_en; // The correct option text
+
+    // Tamil fields
+    @Column(name = "text_ta", nullable = false, length = 1024)
+    private String text_ta;
+
+    @Column(name = "options_ta", columnDefinition = "TEXT")
+    private String options_ta; // JSON array of strings
+
+    @Column(name = "correct_answer_ta", nullable = false)
+    private String correctAnswer_ta; // The correct option text
 
     @Column(nullable = false)
     private String status = "draft"; // e.g., 'draft', 'published'
+
+    @Column(name = "release_date")
+    private String releaseDate;
+
+    @Column(name = "disappear_date")
+    private String disappearDate;
 
     @ManyToOne
     @JoinColumn(name = "author_id")

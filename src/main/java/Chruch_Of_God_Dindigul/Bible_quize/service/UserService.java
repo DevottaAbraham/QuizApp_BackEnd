@@ -1,19 +1,28 @@
 package Chruch_Of_God_Dindigul.Bible_quize.service;
 
+import Chruch_Of_God_Dindigul.Bible_quize.dto.UserDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.model.Role;
 import Chruch_Of_God_Dindigul.Bible_quize.model.User;
 import Chruch_Of_God_Dindigul.Bible_quize.repository.UserRepository;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
-public class UserService {
+public class UserService implements UserDetailsService { // Corrected filename to UserService.java
+
+    private final UserRepository userRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    public UserService(UserRepository userRepository) { // Using constructor injection
+        this.userRepository = userRepository;
+    }
 
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
@@ -27,11 +36,31 @@ public class UserService {
         return userRepository.findAll();
     }
 
+    public List<UserDTO> findAllUsersAsDTO() {
+        return userRepository.findAll().stream()
+                .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole()))
+                .collect(Collectors.toList());
+    }
+
     public void deleteUser(Long id) {
         userRepository.deleteById(id);
     }
 
-    public long countTotalUsers() {
-        return userRepository.countByRole(Role.USER);
+    public Optional<User> findById(Long id) {
+        return userRepository.findById(id);
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with username: " + username));
+    }
+
+    public long countUsersByRole(Role role) {
+        return userRepository.countByRole(role);
+    }
+
+    public long countAllUsers() {
+        return userRepository.count();
     }
 }
