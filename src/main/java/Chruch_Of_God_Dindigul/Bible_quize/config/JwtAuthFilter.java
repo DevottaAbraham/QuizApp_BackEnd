@@ -1,6 +1,7 @@
 package Chruch_Of_God_Dindigul.Bible_quize.config;
 
 import Chruch_Of_God_Dindigul.Bible_quize.service.JwtService;
+import Chruch_Of_God_Dindigul.Bible_quize.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +24,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final TokenBlacklistService tokenBlacklistService;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
     @Override
@@ -45,6 +47,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         try {
             username = jwtService.extractUsername(jwt);
+
+            // Check if the token has been blacklisted (logged out).
+            if (tokenBlacklistService.isTokenBlacklisted(jwt)) {
+                // Reject the request as the token is invalid.
+                throw new Exception("Token has been invalidated by logout.");
+            }
 
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);

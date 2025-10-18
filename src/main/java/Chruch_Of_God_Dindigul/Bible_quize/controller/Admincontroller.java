@@ -133,7 +133,7 @@ public class Admincontroller {
         }
 
         // 4. Save the updated user and return it.
-        User savedUser = userService.createUser(userToUpdate); // createUser also handles updates
+        User savedUser = userService.updateUser(userToUpdate);
         UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole());
         return ResponseEntity.ok(userDTO);
     }

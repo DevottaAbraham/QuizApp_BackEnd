@@ -32,6 +32,11 @@ public class UserService implements UserDetailsService { // Corrected filename t
         return userRepository.save(user);
     }
 
+    public User updateUser(User user) {
+        // This method is functionally the same as createUser but provides better semantic clarity.
+        return userRepository.save(user);
+    }
+
     public List<User> findAllUsers() {
         return userRepository.findAll();
     }

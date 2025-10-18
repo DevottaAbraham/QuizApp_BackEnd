@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Type;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -59,18 +60,10 @@ public class QuestionService {
         Question existingQuestion = questionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Question not found with id: " + id));
 
-        // Use the converter to get a temporary entity with the new data
-        Question updatedData = convertToEntity(dto);
-
-        // Manually update only the fields that should be editable
-        existingQuestion.setText_en(updatedData.getText_en());
-        existingQuestion.setOptions_en(updatedData.getOptions_en());
-        existingQuestion.setCorrectAnswer_en(updatedData.getCorrectAnswer_en());
-        existingQuestion.setText_ta(updatedData.getText_ta());
-        existingQuestion.setOptions_ta(updatedData.getOptions_ta());
-        existingQuestion.setCorrectAnswer_ta(updatedData.getCorrectAnswer_ta());
-        // Note: We are intentionally NOT updating the author or status here.
-        // Status changes (like publishing) should be handled by a separate, more specific method.
+        // Use a dedicated method to update the entity from the DTO.
+        // This is safer as it separates update logic from creation logic.
+        // It also ensures that fields like 'author' and 'status' are not accidentally changed.
+        updateEntityFromDto(existingQuestion, dto);
 
         return convertToDto(questionRepository.save(existingQuestion));
     }
@@ -78,10 +71,17 @@ public class QuestionService {
     public QuestionDTO publishQuestion(Long id, String releaseDate, String disappearDate) {
         Question existingQuestion = questionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Question not found with id: " + id));
+        
+        // Validate and parse the date strings
+        if (releaseDate == null || releaseDate.isBlank() || disappearDate == null || disappearDate.isBlank()) {
+            throw new IllegalArgumentException("Release date and disappear date cannot be empty for publishing.");
+        }
+        LocalDateTime parsedReleaseDate = LocalDateTime.parse(releaseDate);
+        LocalDateTime parsedDisappearDate = LocalDateTime.parse(disappearDate);
 
         existingQuestion.setStatus("published");
-        existingQuestion.setReleaseDate(releaseDate);
-        existingQuestion.setDisappearDate(disappearDate);
+        existingQuestion.setReleaseDate(parsedReleaseDate);
+        existingQuestion.setDisappearDate(parsedDisappearDate);
 
         Question publishedQuestion = questionRepository.save(existingQuestion);
         return convertToDto(publishedQuestion);
@@ -94,8 +94,10 @@ public class QuestionService {
     private QuestionDTO convertToDto(Question question) {
         QuestionDTO dto = new QuestionDTO();
         dto.setId(question.getId());
+        dto.setText(question.getText());
         dto.setText_en(question.getText_en());
         dto.setOptions_en(gson.fromJson(question.getOptions_en(), listStringType));
+        dto.setCorrectAnswer(question.getCorrectAnswer());
         dto.setCorrectAnswer_en(question.getCorrectAnswer_en()); // Send the answer text directly
         dto.setText_ta(question.getText_ta());
         dto.setOptions_ta(gson.fromJson(question.getOptions_ta(), listStringType));
@@ -112,6 +114,21 @@ public class QuestionService {
     private Question convertToEntity(QuestionDTO dto) {
         Question question = new Question();
         question.setId(dto.getId());
+
+        // If the main 'text' field is missing, default to using the English text.
+        // This provides backward compatibility for requests that don't include the new field.
+        if (dto.getText() != null && !dto.getText().isBlank()) {
+            question.setText(dto.getText());
+        } else {
+            question.setText(dto.getText_en());
+        }
+
+        // If the main 'correctAnswer' field is missing, default to using the English one.
+        if (dto.getCorrectAnswer() != null && !dto.getCorrectAnswer().isBlank()) {
+            question.setCorrectAnswer(dto.getCorrectAnswer());
+        } else {
+            question.setCorrectAnswer(dto.getCorrectAnswer_en());
+        }
 
         // --- LOGIC CORRECTION: Process the answer as a string, not an index ---
         if (dto.getOptions_en() == null || dto.getOptions_en().isEmpty()) {
@@ -144,19 +161,69 @@ public class QuestionService {
         return question;
     }
 
+    /**
+     * Updates an existing Question entity with data from a QuestionDTO.
+     * This method centralizes validation and mapping for updates.
+     * It intentionally does NOT modify the author or status.
+     */
+    private void updateEntityFromDto(Question question, QuestionDTO dto) {
+        // --- Validation ---
+        if (dto.getOptions_en() == null || dto.getOptions_en().isEmpty()) {
+            throw new IllegalArgumentException("English options cannot be empty.");
+        }
+        if (dto.getCorrectAnswer_en() == null || !dto.getOptions_en().contains(dto.getCorrectAnswer_en())) {
+            throw new IllegalArgumentException("The provided English correct answer is not one of the available options.");
+        }
+        if (dto.getOptions_ta() == null || dto.getOptions_ta().isEmpty()) {
+            throw new IllegalArgumentException("Tamil options cannot be empty.");
+        }
+        if (dto.getCorrectAnswer_ta() == null || !dto.getOptions_ta().contains(dto.getCorrectAnswer_ta())) {
+            throw new IllegalArgumentException("The provided Tamil correct answer is not one of the available options.");
+        }
+
+        // --- Mapping ---
+        // If the main 'text' field is missing, default to using the English text.
+        if (dto.getText() != null && !dto.getText().isBlank()) {
+            question.setText(dto.getText());
+        } else {
+            question.setText(dto.getText_en());
+        }
+
+        // If the main 'correctAnswer' field is missing, default to using the English one.
+        if (dto.getCorrectAnswer() != null && !dto.getCorrectAnswer().isBlank()) {
+            question.setCorrectAnswer(dto.getCorrectAnswer());
+        } else {
+            question.setCorrectAnswer(dto.getCorrectAnswer_en());
+        }
+
+        question.setText_en(dto.getText_en());
+        question.setOptions_en(gson.toJson(dto.getOptions_en()));
+        question.setCorrectAnswer_en(dto.getCorrectAnswer_en());
+        question.setText_ta(dto.getText_ta());
+        question.setOptions_ta(gson.toJson(dto.getOptions_ta()));
+        question.setCorrectAnswer_ta(dto.getCorrectAnswer_ta());
+    }
+
     public void publishBulkQuestions(List<Long> questionIds, String releaseDate, String disappearDate) {
         List<Question> questionsToPublish = questionRepository.findAllById(questionIds);
         for (Question question : questionsToPublish) {
+            // Validate and parse the date strings
+            if (releaseDate == null || releaseDate.isBlank() || disappearDate == null || disappearDate.isBlank()) {
+                throw new IllegalArgumentException("Release date and disappear date cannot be empty for publishing.");
+            }
+            LocalDateTime parsedReleaseDate = LocalDateTime.parse(releaseDate);
+            LocalDateTime parsedDisappearDate = LocalDateTime.parse(disappearDate);
+
             question.setStatus("published");
-            question.setReleaseDate(releaseDate);
-            question.setDisappearDate(disappearDate);
+            question.setReleaseDate(parsedReleaseDate);
+            question.setDisappearDate(parsedDisappearDate);
         }
         questionRepository.saveAll(questionsToPublish);
     }
 
     public void deleteAllPublishedQuestions() {
         List<Question> publishedQuestions = questionRepository.findByStatus("published");
-        if (publishedQuestions != null && !publishedQuestions.isEmpty()) {
+        if (!publishedQuestions.isEmpty()) {
             questionRepository.deleteAll(publishedQuestions);
         }
     }

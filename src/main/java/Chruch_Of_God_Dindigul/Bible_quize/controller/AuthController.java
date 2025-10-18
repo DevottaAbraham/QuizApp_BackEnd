@@ -6,6 +6,7 @@ import Chruch_Of_God_Dindigul.Bible_quize.dto.RegistrationRequest;
 import Chruch_Of_God_Dindigul.Bible_quize.model.Role;
 import Chruch_Of_God_Dindigul.Bible_quize.model.User;
 import Chruch_Of_God_Dindigul.Bible_quize.service.JwtService;
+import Chruch_Of_God_Dindigul.Bible_quize.service.TokenBlacklistService;
 import Chruch_Of_God_Dindigul.Bible_quize.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.GrantedAuthority;
-import java.util.stream.Collectors;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,10 +30,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173") // Allow requests from your frontend
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
@@ -40,16 +41,18 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Value("${application.security.admin-setup-token}")
     private String adminSetupToken;
 
     @Autowired
-    public AuthController(UserService userService, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager) {
+    public AuthController(UserService userService, PasswordEncoder passwordEncoder, JwtService jwtService, AuthenticationManager authenticationManager, TokenBlacklistService tokenBlacklistService) {
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @PostMapping("/login")
@@ -72,14 +75,19 @@ public class AuthController {
                     .collect(Collectors.toList());
             claims.put("authorities", authorities);
 
-            // Generate the token with the claims.
-            String token = jwtService.generateToken(claims, user);
+            // Generate both access and refresh tokens
+            String accessToken = jwtService.generateAccessToken(claims, user);
+            String refreshToken = jwtService.generateRefreshToken(user);
+
+            // Save the refresh token to the user in the database
+            user.setRefreshToken(refreshToken);
+            userService.updateUser(user);
 
             logger.info("User '{}' logged in successfully with role {}", user.getUsername(), user.getRole());
 
             // The frontend will receive this response. It MUST check the 'role' field
             // to decide whether to redirect to the admin dashboard or the user page.
-            return ResponseEntity.ok(new LoginResponse(user.getId(), user.getUsername(), user.getRole(), token));
+            return ResponseEntity.ok(new LoginResponse(user.getId(), user.getUsername(), user.getRole(), accessToken, refreshToken));
 
         } catch (AuthenticationException e) {
             logger.warn("Login failed for user {}: {}", loginRequest.getUsername(), e.getMessage());
@@ -132,5 +140,58 @@ public class AuthController {
         boolean isSetupComplete = userService.countAllUsers() > 0;
         logger.info("Checking application setup status. Is setup complete? {}", isSetupComplete);
         return ResponseEntity.ok(Map.of("isSetupComplete", isSetupComplete));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletRequest request) {
+        final String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            try {
+                String accessToken = authHeader.substring(7);
+                String username = jwtService.extractUsername(accessToken);
+
+                // Invalidate the refresh token in the database
+                userService.findByUsername(username).ifPresent(user -> {
+                    user.setRefreshToken(null);
+                    userService.updateUser(user);
+                });
+
+                // Blacklist the current access token so it can't be used for its remaining lifespan
+                tokenBlacklistService.blacklistToken(accessToken);
+
+                logger.info("User '{}' successfully logged out. Refresh token revoked and access token blacklisted.", username);
+                return ResponseEntity.ok(Map.of("message", "You have been successfully logged out."));
+            } catch (Exception e) {
+                // This can happen if the token is already expired or malformed.
+                // We can still consider the user logged out.
+                logger.warn("Logout attempt with an invalid token: {}", e.getMessage());
+                return ResponseEntity.ok(Map.of("message", "Logout successful (token was already invalid)."));
+            }
+        }
+        logger.warn("Logout attempt with no token.");
+        return ResponseEntity.badRequest().body(Map.of("message", "Logout requires a valid token."));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
+        String refreshToken = request.get("refreshToken");
+        try {
+            String username = jwtService.extractUsername(refreshToken);
+            User user = (User) userService.loadUserByUsername(username);
+
+            // Check if the provided refresh token matches the one stored in the database
+            if (refreshToken.equals(user.getRefreshToken()) && !jwtService.isTokenExpired(refreshToken)) {
+                Map<String, Object> claims = new HashMap<>();
+                List<String> authorities = user.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .collect(Collectors.toList());
+                claims.put("authorities", authorities);
+                String newAccessToken = jwtService.generateAccessToken(claims, user);
+                return ResponseEntity.ok(Map.of("accessToken", newAccessToken));
+            }
+        } catch (Exception e) {
+            // Catches any JWT parsing errors or other issues
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid or expired refresh token."));
     }
 }

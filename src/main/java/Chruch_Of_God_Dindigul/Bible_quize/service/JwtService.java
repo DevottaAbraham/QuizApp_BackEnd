@@ -6,29 +6,45 @@ import io.jsonwebtoken.io.Decoders;
 import java.security.Key;
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 @Service
 public class JwtService {
 
-    // CRITICAL FIX: Replaced the placeholder with a secure, Base64-encoded 512-bit secret key.
-    private static final String SECRET_KEY = "YmFja2VuZC1zZWN1cml0eS1mb3ItYmlibGUtcXVpenotYXBwbGljYXRpb24tYW5kLXdlYnNpdGUtZGVzaWdu"; 
-    private static final long JWT_EXPIRATION = 1000 * 60 * 60; // 1 hour
- 
+    @Value("${application.security.jwt.secret-key}")
+    private String secretKey;
+
+    @Value("${application.security.jwt.access-token-expiration}")
+    private long accessTokenExpiration;
+
+    @Value("${application.security.jwt.refresh-token-expiration}")
+    private long refreshTokenExpiration;
+
     private SecretKey getSignKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(SECRET_KEY);
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    // ✅ Generate JWT token (modern API)
-    public String generateToken(Map<String, Object> claims, UserDetails userDetails) {
+    public String generateAccessToken(Map<String, Object> claims, UserDetails userDetails) {
         return Jwts.builder()
                 .claims(claims)
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + JWT_EXPIRATION))
+                .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
+                .signWith(getSignKey())
+                .compact();
+    }
+
+    public String generateRefreshToken(UserDetails userDetails) {
+        return Jwts.builder()
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
                 .signWith(getSignKey())
                 .compact();
     }
@@ -49,7 +65,13 @@ public class JwtService {
 
     // ✅ Check if token is expired
     public boolean isTokenExpired(String token) {
-        return extractAllClaims(token).getExpiration().before(new Date());
+        final Date expiration = extractAllClaims(token).getExpiration();
+        if (expiration == null) {
+            // If there is no expiration claim, the token is considered non-expiring from a time perspective.
+            // Its validity will be determined by other factors, like the blacklist.
+            return false;
+        }
+        return expiration.before(new Date());
     }
 
     // ✅ Validate token

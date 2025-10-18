@@ -10,4 +10,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // Use Optional for better null handling
     Optional<User> findByUsername(String username);
     long countByRole(Role role);
+    Optional<User> findByRefreshToken(String refreshToken);
 }

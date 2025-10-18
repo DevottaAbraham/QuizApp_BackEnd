@@ -34,6 +34,9 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role;
 
+    @Column(name = "refresh_token", length = 512)
+    private String refreshToken;
+
     /**
      * This is the critical method that provides the user's role to Spring Security.
      * It must return a collection of GrantedAuthority objects.
