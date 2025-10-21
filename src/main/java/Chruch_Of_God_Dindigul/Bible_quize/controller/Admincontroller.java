@@ -1,13 +1,18 @@
 package Chruch_Of_God_Dindigul.Bible_quize.controller;
 
 import Chruch_Of_God_Dindigul.Bible_quize.dto.UserDTO; // Keep one
+import Chruch_Of_God_Dindigul.Bible_quize.dto.LeaderboardDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.QuestionDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.RegistrationRequest;
+import Chruch_Of_God_Dindigul.Bible_quize.dto.QuizResultDTO;
+import Chruch_Of_God_Dindigul.Bible_quize.model.HomePageContent;
+import Chruch_Of_God_Dindigul.Bible_quize.service.HomePageContentService;
 import Chruch_Of_God_Dindigul.Bible_quize.model.Role;
 import Chruch_Of_God_Dindigul.Bible_quize.model.User;
 import Chruch_Of_God_Dindigul.Bible_quize.service.QuestionService;
 import Chruch_Of_God_Dindigul.Bible_quize.service.UserService;
 import org.springframework.security.core.context.SecurityContextHolder;
+import Chruch_Of_God_Dindigul.Bible_quize.service.ScoreService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -19,23 +24,29 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/admin")
-public class Admincontroller {
+class Admincontroller {
 
     private static final Logger logger = LoggerFactory.getLogger(Admincontroller.class);
 
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final QuestionService questionService;
+    private final HomePageContentService homePageContentService;
+    private final ScoreService scoreService;
 
     @Autowired
-    public Admincontroller(UserService userService, PasswordEncoder passwordEncoder, QuestionService questionService) {
+    public Admincontroller(UserService userService, PasswordEncoder passwordEncoder, QuestionService questionService, HomePageContentService homePageContentService, ScoreService scoreService) {
         this.userService = userService;
         this.passwordEncoder = passwordEncoder;
         this.questionService = questionService;
+        this.homePageContentService = homePageContentService;
+        this.scoreService = scoreService;
     }
 
     @GetMapping("/dashboard")
@@ -67,9 +78,84 @@ public class Admincontroller {
 
     @GetMapping("/users")
     public ResponseEntity<List<UserDTO>> getAllUsers() {
-        return ResponseEntity.ok(userService.findAllUsersAsDTO());
+        // Filter the list to only include users with the 'USER' role.
+        List<UserDTO> users = userService.findAllUsersAsDTO().stream()
+                .filter(user -> user.getRole() == Role.USER)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(users);
     }
 
+    /**
+     * Gets a list of all users with the ADMIN role.
+     * This provides a dedicated endpoint for the "Manage Admins" page.
+     */
+    @GetMapping("/admins")
+    public ResponseEntity<List<UserDTO>> getAllAdmins() {
+        List<UserDTO> admins = userService.findAllUsersAsDTO().stream()
+                .filter(user -> user.getRole() == Role.ADMIN)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(admins);
+    }
+
+    /**
+     * Gets a list of all users who are considered "active"
+     * (i.e., they have a non-null refresh token).
+     */
+    @GetMapping("/users/active")
+    public ResponseEntity<List<UserDTO>> getActiveUsers() {
+        List<UserDTO> activeUsers = userService.findActiveUsers();
+        return ResponseEntity.ok(activeUsers);
+    }
+
+    /**
+     * Gets the score history for a specific user, identified by their ID.
+     * This allows an admin to view the performance of a single user.
+     */
+    @GetMapping("/users/{userId}/scores")
+    public ResponseEntity<List<QuizResultDTO>> getScoresForUser(@PathVariable Long userId) {
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+
+        List<QuizResultDTO> history = scoreService.getScoreHistoryForUser(user);
+        return ResponseEntity.ok(history);
+    }
+
+    /**
+     * Gets all scores from all users.
+     * This is for the main admin "View Scores" page.
+     */
+    @GetMapping("/scores")
+    public ResponseEntity<List<QuizResultDTO>> getAllScores() {
+        List<QuizResultDTO> allScores = scoreService.getAllScores();
+        return ResponseEntity.ok(allScores);
+    }
+
+    /**
+     * Gets the leaderboard data.
+     * This is now an admin-only endpoint.
+     */
+    @GetMapping("/leaderboard")
+    public ResponseEntity<List<LeaderboardDTO>> getLeaderboard() {
+        List<LeaderboardDTO> leaderboard = scoreService.getLeaderboard();
+        return ResponseEntity.ok(leaderboard);
+    }
+
+    /**
+     * Creates a new user with the ADMIN role.
+     * This provides a dedicated and secure endpoint for adding new administrators.
+     */
+    @PostMapping("/admins")
+    public ResponseEntity<?> createAdmin(@RequestBody RegistrationRequest registrationRequest) {
+        if (userService.findByUsername(registrationRequest.getUsername()).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Username is already taken!"));
+        }
+        User user = new User();
+        user.setUsername(registrationRequest.getUsername());
+        user.setPassword(passwordEncoder.encode(registrationRequest.getPassword()));
+        user.setRole(Role.ADMIN); // Always create an ADMIN
+        User savedUser = userService.createUser(user);
+        return new ResponseEntity<>(new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole()), HttpStatus.CREATED);
+    }
     @PostMapping("/users")
     public ResponseEntity<?> createUser(@RequestBody RegistrationRequest registrationRequest, Authentication authentication) {
         if (userService.findByUsername(registrationRequest.getUsername()).isPresent()) {
@@ -78,11 +164,35 @@ public class Admincontroller {
         User user = new User();
         user.setUsername(registrationRequest.getUsername());
         user.setPassword(passwordEncoder.encode(registrationRequest.getPassword()));
-        user.setRole(registrationRequest.getRole());
+        // Enforce that this endpoint can only create users with the USER role.
+        user.setRole(Role.USER);
 
         User savedUser = userService.createUser(user);
         UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole());
         return new ResponseEntity<>(userDTO, HttpStatus.CREATED);
+    }
+
+    /**
+     * Deletes a user, including other administrators.
+     * A crucial security check prevents an admin from deleting their own account.
+     */
+    @DeleteMapping("/admins/{id}")
+    public ResponseEntity<?> deleteAdmin(@PathVariable Long id, Authentication authentication) {
+        User currentUser = (User) authentication.getPrincipal();
+
+        // Security Critical: Prevent an admin from deleting themselves.
+        if (currentUser.getId().equals(id)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "You cannot delete your own account."));
+        }
+
+        Optional<User> userToDelete = userService.findById(id);
+        if (userToDelete.isEmpty()) {
+            return ResponseEntity.noContent().build(); // User already gone, idempotent success
+        }
+
+        // Proceed with deletion if the user exists and is not the current admin.
+        userService.deleteUserById(id);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/users/{id}")
@@ -93,13 +203,12 @@ public class Admincontroller {
             return ResponseEntity.noContent().build(); // User already gone, idempotent success
         }
 
-        // Security Check: Prevent the main 'admin' account from being deleted.
-        // We check for the first user created, assuming that is the root admin.
-        if (userToDelete.get().getId() == 1L) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "The root admin account cannot be deleted."));
+        // Security Enhancement: Prevent any admin account from being deleted via this endpoint.
+        if (userToDelete.get().getRole() == Role.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Admin accounts cannot be deleted."));
         }
 
-        userService.deleteUser(id);
+        userService.deleteUserById(id);
         return ResponseEntity.noContent().build();
     }
 
@@ -112,9 +221,9 @@ public class Admincontroller {
         }
         User userToUpdate = userToUpdateOptional.get();
 
-        // Security Check: The main 'admin' user's role cannot be changed.
-        if (userToUpdate.getId() == 1L && registrationRequest.getRole() != Role.ADMIN) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "The root admin's role cannot be changed."));
+        // Security Enhancement: Prevent any admin account from being modified via this endpoint.
+        if (userToUpdate.getRole() == Role.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Admin accounts cannot be modified."));
         }
         
         // 2. Check for username conflict.
@@ -136,6 +245,40 @@ public class Admincontroller {
         User savedUser = userService.updateUser(userToUpdate);
         UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole());
         return ResponseEntity.ok(userDTO);
+    }
+
+    /**
+     * Resets a user's password to a new, randomly generated one.
+     * Returns the new plain-text password to the admin.
+     */
+    @PostMapping("/users/{id}/reset-password")
+    public ResponseEntity<?> resetUserPassword(@PathVariable Long id) {
+        Optional<User> userOptional = userService.findById(id);
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        User user = userOptional.get();
+
+        if (user.getRole() == Role.ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Cannot reset password for an admin account."));
+        }
+
+        String newPassword = UUID.randomUUID().toString().substring(0, 8);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userService.updateUser(user);
+
+        logger.info("Password for user '{}' has been reset by an admin.", user.getUsername());
+
+        return ResponseEntity.ok(Map.of("message", "Password reset successfully.", "newPassword", newPassword));
+    }
+
+    // --- Content Management Endpoints ---
+
+    @PutMapping("/content/home")
+    public ResponseEntity<HomePageContent> updateHomePageContent(@RequestBody Map<String, String> payload) {
+        String content = payload.get("content");
+        HomePageContent updatedContent = homePageContentService.updateHomePageContent(content);
+        return ResponseEntity.ok(updatedContent);
     }
 
     // --- Question Management Endpoints ---

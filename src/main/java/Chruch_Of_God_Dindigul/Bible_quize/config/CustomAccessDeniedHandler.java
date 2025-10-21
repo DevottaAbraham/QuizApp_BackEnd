@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -23,6 +24,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
     private static final Logger logger = LoggerFactory.getLogger(CustomAccessDeniedHandler.class);
     private final ObjectMapper objectMapper;
 
+    @Autowired
     public CustomAccessDeniedHandler(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }

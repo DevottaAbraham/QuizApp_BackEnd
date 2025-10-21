@@ -8,6 +8,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -28,6 +30,12 @@ public class UserService implements UserDetailsService { // Corrected filename t
         return userRepository.findByUsername(username);
     }
 
+    /**
+     * Creates a new user and ensures the transaction is committed immediately.
+     * This prevents race conditions where a user is logged in before their record is visible
+     * to subsequent requests.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public User createUser(User user) {
         return userRepository.save(user);
     }
@@ -47,7 +55,14 @@ public class UserService implements UserDetailsService { // Corrected filename t
                 .collect(Collectors.toList());
     }
 
-    public void deleteUser(Long id) {
+
+    public List<UserDTO> findActiveUsers() {
+        return userRepository.findByRefreshTokenIsNotNull().stream()
+                .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole()))
+                .collect(Collectors.toList());
+    }
+
+    public void deleteUserById(Long id) {
         userRepository.deleteById(id);
     }
 

@@ -204,6 +204,13 @@ public class QuestionService {
         question.setCorrectAnswer_ta(dto.getCorrectAnswer_ta());
     }
 
+    public void updateQuestionStatus(Long id, String status) {
+        Question question = questionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Question not found with id: " + id));
+        question.setStatus(status);
+        questionRepository.save(question);
+    }
+
     public void publishBulkQuestions(List<Long> questionIds, String releaseDate, String disappearDate) {
         List<Question> questionsToPublish = questionRepository.findAllById(questionIds);
         for (Question question : questionsToPublish) {
@@ -226,5 +233,17 @@ public class QuestionService {
         if (!publishedQuestions.isEmpty()) {
             questionRepository.deleteAll(publishedQuestions);
         }
+    }
+
+    public List<QuestionDTO> getPublishedQuestionsForQuiz() {
+        LocalDateTime now = LocalDateTime.now();
+        // 1. Find all questions with "published" status.
+        // 2. Filter them to only include questions where the current time is after the releaseDate and before the disappearDate.
+        // 3. Convert the final list of questions to DTOs to be sent to the frontend.
+        return questionRepository.findByStatus("published").stream()
+                .filter(q -> q.getReleaseDate() != null && q.getDisappearDate() != null && 
+                             !now.isBefore(q.getReleaseDate()) && !now.isAfter(q.getDisappearDate()))
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
     }
 }

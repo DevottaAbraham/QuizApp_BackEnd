@@ -57,16 +57,27 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Permit all OPTIONS requests for CORS preflight
                         .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll()
-                        // Publicly accessible endpoints
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow public access to uploaded files
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/quizzes/active"), mvcMatcherBuilder.pattern("/actuator/**")).permitAll()
-                        // Admin-only endpoints
+                        // Admin-only endpoints: Grant full access to all /api/admin/** routes.
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasRole("ADMIN")
-                        // User-accessible endpoints (also accessible by Admin)
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/user/**")).hasAnyRole("USER", "ADMIN")
-                        // Any other request must be authenticated
-                        .anyRequest().authenticated())
+                        // User-accessible endpoints (also accessible by Admin).
+                        // This includes fetching user data, quiz history, notices, etc.
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/user/**"), mvcMatcherBuilder.pattern("/api/scores/**")).authenticated()
+                        // Publicly accessible endpoints
+                        .requestMatchers(
+                                mvcMatcherBuilder.pattern("/api/auth/login"),
+                                mvcMatcherBuilder.pattern("/api/auth/register"),
+                                mvcMatcherBuilder.pattern("/api/auth/register-admin"),
+                                mvcMatcherBuilder.pattern("/api/auth/setup-status"),
+                                mvcMatcherBuilder.pattern("/api/auth/refresh"), // Allow access to the refresh endpoint
+                                mvcMatcherBuilder.pattern("/api/auth/forgot-password-generate-temp"),
+                                mvcMatcherBuilder.pattern("/api/auth/me")).permitAll() // Allow access to check session status
+                        .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow public access to uploaded files
+                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow access to the default error page
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public access to content like the home page
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/quizzes/active")).permitAll()
+                        // All other requests must be authenticated
+                        .anyRequest().authenticated()
+                )
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                         .accessDeniedHandler(customAccessDeniedHandler)

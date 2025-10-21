@@ -4,8 +4,10 @@ import Chruch_Of_God_Dindigul.Bible_quize.service.JwtService;
 import Chruch_Of_God_Dindigul.Bible_quize.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -13,10 +15,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -27,51 +35,75 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final TokenBlacklistService tokenBlacklistService;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
+    // This matcher will check if a request is for a public endpoint.
+    private final RequestMatcher publicEndpoints = new OrRequestMatcher(
+        new AntPathRequestMatcher("/api/auth/login"),
+        new AntPathRequestMatcher("/api/auth/register"),
+        new AntPathRequestMatcher("/api/auth/register-admin"),
+        new AntPathRequestMatcher("/api/auth/setup-status"),
+        new AntPathRequestMatcher("/api/auth/refresh"),
+        new AntPathRequestMatcher("/api/auth/forgot-password-generate-temp"),
+        new AntPathRequestMatcher("/uploads/**"),
+        new AntPathRequestMatcher("/error"),
+        new AntPathRequestMatcher("/api/quizzes/active")
+    );
+
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String username;
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        // If the request matches any of our defined public endpoints, skip the JWT validation logic.
+        // This is crucial to prevent the filter from processing tokens on public routes,
+        // which can cause authentication errors immediately after login or registration.
+        if (publicEndpoints.matches(request)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
+        String jwt = null;
+        final String username;
+
+        // Extract JWT from the httpOnly cookie named "accessToken"
+        if (request.getCookies() != null) {
+            jwt = Arrays.stream(request.getCookies())
+                    .filter(cookie -> "accessToken".equals(cookie.getName()))
+                    .map(Cookie::getValue)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        if (jwt == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         try {
             username = jwtService.extractUsername(jwt);
 
-            // Check if the token has been blacklisted (logged out).
-            if (tokenBlacklistService.isTokenBlacklisted(jwt)) {
-                // Reject the request as the token is invalid.
-                throw new Exception("Token has been invalidated by logout.");
-            }
-
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
                 if (jwtService.isTokenValid(jwt, userDetails)) {
+                    // CRITICAL FIX: Extract authorities directly from the token's claims
+                    // This ensures the user's roles are correctly loaded for every request.
+                    Claims claims = jwtService.extractAllClaims(jwt);
+                    List<String> authoritiesList = claims.get("authorities", List.class);
+
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,
                             null, // Credentials are not needed as we are using a token
-                            userDetails.getAuthorities() // This provides the roles (e.g., "ROLE_ADMIN")
+                            jwtService.getAuthoritiesFromClaims(authoritiesList)
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (Exception e) { // Catches ExpiredJwtException, MalformedJwtException, etc.
-            // If a token is provided but is invalid, we must immediately reject the request.
-            // We clear the context and use the custom entry point to send a 401 response.
-            SecurityContextHolder.clearContext();
-            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("Invalid or expired JWT token.", e) {});
-            return; // IMPORTANT: Stop the filter chain here.
+        } catch (Exception e) {
+            // If any exception occurs during token validation (e.g., token expired, malformed),
+            // we must ensure the request is rejected. We delegate this to the entry point.
+            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("Invalid JWT token: " + e.getMessage()) {});
+            return; // Stop the filter chain
         }
 
         filterChain.doFilter(request, response);
