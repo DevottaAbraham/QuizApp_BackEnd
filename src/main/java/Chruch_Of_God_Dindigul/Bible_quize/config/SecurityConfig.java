@@ -61,7 +61,9 @@ public class SecurityConfig {
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasRole("ADMIN")
                         // User-accessible endpoints (also accessible by Admin).
                         // This includes fetching user data, quiz history, notices, etc.
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/user/**"), mvcMatcherBuilder.pattern("/api/scores/**")).authenticated()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/user/**"),
+                                       mvcMatcherBuilder.pattern("/api/scores/**"),
+                                       mvcMatcherBuilder.pattern("/api/quizzes/submit")).authenticated()
                         // Publicly accessible endpoints
                         .requestMatchers(
                                 mvcMatcherBuilder.pattern("/api/auth/login"),
@@ -73,8 +75,8 @@ public class SecurityConfig {
                                 mvcMatcherBuilder.pattern("/api/auth/me")).permitAll() // Allow access to check session status
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow public access to uploaded files
                         .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow access to the default error page
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public access to content like the home page
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/quizzes/active")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public access to content
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/quizzes/active")).authenticated() // This endpoint must be authenticated
                         // All other requests must be authenticated
                         .anyRequest().authenticated()
                 )

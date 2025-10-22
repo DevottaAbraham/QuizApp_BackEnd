@@ -4,6 +4,7 @@ import Chruch_Of_God_Dindigul.Bible_quize.dto.UserDTO; // Keep one
 import Chruch_Of_God_Dindigul.Bible_quize.dto.LeaderboardDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.QuestionDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.RegistrationRequest;
+import Chruch_Of_God_Dindigul.Bible_quize.dto.MonthlyPerformanceDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.QuizResultDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.model.HomePageContent;
 import Chruch_Of_God_Dindigul.Bible_quize.service.HomePageContentService;
@@ -128,6 +129,20 @@ class Admincontroller {
     public ResponseEntity<List<QuizResultDTO>> getAllScores() {
         List<QuizResultDTO> allScores = scoreService.getAllScores();
         return ResponseEntity.ok(allScores);
+    }
+
+    /**
+     * Gets the monthly performance data for a specific user.
+     * This data is structured to be easily used by frontend charting libraries for animation.
+     * @param userId The ID of the user.
+     * @return A list of objects, each containing a month and the user's average score percentage for that month.
+     */
+    @GetMapping("/users/{userId}/performance")
+    public ResponseEntity<List<MonthlyPerformanceDTO>> getUserPerformance(@PathVariable Long userId) {
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+        List<MonthlyPerformanceDTO> performanceData = scoreService.getMonthlyPerformanceForUser(user);
+        return ResponseEntity.ok(performanceData);
     }
 
     /**

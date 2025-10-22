@@ -30,23 +30,23 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
-    private final TokenBlacklistService tokenBlacklistService;
-    private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
-
-    // This matcher will check if a request is for a public endpoint.
     private final RequestMatcher publicEndpoints = new OrRequestMatcher(
         new AntPathRequestMatcher("/api/auth/login"),
         new AntPathRequestMatcher("/api/auth/register"),
         new AntPathRequestMatcher("/api/auth/register-admin"),
         new AntPathRequestMatcher("/api/auth/setup-status"),
-        new AntPathRequestMatcher("/api/auth/refresh"),
+        new AntPathRequestMatcher("/api/auth/refresh"), // The refresh endpoint itself is public, but requires a valid refresh token cookie.
+        // /api/auth/me should NOT be public in JwtAuthFilter, as it needs to be processed to validate the accessToken.
         new AntPathRequestMatcher("/api/auth/forgot-password-generate-temp"),
         new AntPathRequestMatcher("/uploads/**"),
         new AntPathRequestMatcher("/error"),
-        new AntPathRequestMatcher("/api/quizzes/active")
+        new AntPathRequestMatcher("/api/content/**") // Add public content endpoints
     );
+
+    private final JwtService jwtService;
+    private final UserDetailsService userDetailsService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
     @Override
     protected void doFilterInternal(

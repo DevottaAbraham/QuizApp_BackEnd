@@ -6,5 +6,8 @@ public record QuizResultDTO(
     Long quizId,
     String quizDate,
     int score,
-    List<AnsweredQuestionDTO> answeredQuestions
+    int totalQuestions,
+    List<AnsweredQuestionDTO> answeredQuestions,
+    Long userId,
+    String username
 ) {}

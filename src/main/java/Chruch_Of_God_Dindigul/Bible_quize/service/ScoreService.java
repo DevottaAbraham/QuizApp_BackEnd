@@ -1,6 +1,7 @@
 package Chruch_Of_God_Dindigul.Bible_quize.service;
 
 import Chruch_Of_God_Dindigul.Bible_quize.dto.AnsweredQuestionDTO;
+import Chruch_Of_God_Dindigul.Bible_quize.dto.MonthlyPerformanceDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.LeaderboardDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.QuizResultDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.model.Score;
@@ -22,13 +23,16 @@ import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.lang.reflect.Type;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import com.google.gson.reflect.TypeToken;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,10 +40,12 @@ public class ScoreService {
 
     private final ScoreRepository scoreRepository;
     private final Gson gson = new Gson();
+    private final Type answeredQuestionListType;
 
     @Autowired
     public ScoreService(ScoreRepository scoreRepository) {
         this.scoreRepository = scoreRepository;
+        this.answeredQuestionListType = new TypeToken<List<AnsweredQuestionDTO>>(){}.getType();
     }
 
     public List<LeaderboardDTO> getLeaderboard() {
@@ -71,8 +77,9 @@ public class ScoreService {
 
     public QuizResultDTO calculateAndSaveScore(QuizResultDTO submission, User user) {
         int correctAnswers = 0;
+        int totalQuestions = submission.answeredQuestions() != null ? submission.answeredQuestions().size() : 0;
         // Only iterate if answeredQuestions is not null
-        if (submission.answeredQuestions() != null) {
+        if (totalQuestions > 0) {
             for (AnsweredQuestionDTO answeredQuestion : submission.answeredQuestions()) {
                 if (answeredQuestion.isCorrect()) {
                     correctAnswers++;
@@ -82,6 +89,7 @@ public class ScoreService {
         Score score = new Score();
         score.setUser(user);
         score.setScoreValue(correctAnswers);
+        score.setTotalQuestions(totalQuestions);
         // Store the detailed answers as a JSON string in the database
         score.setAnsweredQuestionsJson(gson.toJson(submission.answeredQuestions()));
         score.setQuizDate(LocalDateTime.now());
@@ -92,29 +100,81 @@ public class ScoreService {
             savedScore.getId(),
             savedScore.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
             savedScore.getScoreValue(),
-            submission.answeredQuestions()
+            savedScore.getTotalQuestions(),
+            submission.answeredQuestions(),
+            user.getId(),
+            user.getUsername()
         );
     }
 
     public List<QuizResultDTO> getScoreHistoryForUser(User user) {
         return scoreRepository.findByUserOrderByQuizDateDesc(user).stream()
-            .map(score -> new QuizResultDTO(
+            .map(score -> {
+                return new QuizResultDTO(
                 score.getId(),
                 score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                 score.getScoreValue(),
-                null // Answered questions are not needed for the history list
-            ))
+                score.getTotalQuestions(),
+                null, // Answered questions are not needed for the history list
+                user.getId(),
+                user.getUsername()
+            ); // Semicolon to end the return statement
+        }) // Closing brace for the lambda block
             .collect(Collectors.toList());
+    }
+
+
+    public List<Score> getScoresForUserSince(User user, LocalDateTime since) {
+        return scoreRepository.findByUserAndQuizDateAfter(user, since);
     }
 
     public List<QuizResultDTO> getAllScores() {
         return scoreRepository.findAllByOrderByQuizDateDesc().stream()
-            .map(score -> new QuizResultDTO(
+            .map(score -> {
+                return new QuizResultDTO(
                 score.getId(),
                 score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                 score.getScoreValue(),
-                null // Answered questions are not needed for the full list
+                score.getTotalQuestions(),
+                null, // Answered questions are not needed for the full list
+                score.getUser().getId(), // Pass the user ID from the score object
+                score.getUser().getUsername()
+            )
+            ; // Semicolon to end the return statement
+        }).collect(Collectors.toList());
+    }
+
+    public List<MonthlyPerformanceDTO> getMonthlyPerformance() {
+        List<Score> allScores = scoreRepository.findAll();
+        
+        return allScores.stream()
+            .collect(Collectors.groupingBy(
+                score -> score.getQuizDate().withDayOfMonth(1).toLocalDate(), // Group by year and month
+                Collectors.averagingDouble(Score::getScoreValue)
             ))
+            .entrySet().stream()
+            .map(entry -> new MonthlyPerformanceDTO(
+                entry.getKey().format(DateTimeFormatter.ofPattern("yyyy-MM")),
+                entry.getValue()
+            ))
+            .sorted(Comparator.comparing(MonthlyPerformanceDTO::month))
+            .collect(Collectors.toList());
+    }
+
+    public List<MonthlyPerformanceDTO> getMonthlyPerformanceForUser(User user) {
+        List<Score> userScores = scoreRepository.findByUserOrderByQuizDateDesc(user);
+
+        return userScores.stream()
+            .collect(Collectors.groupingBy(
+                score -> score.getQuizDate().withDayOfMonth(1).toLocalDate(), // Group by year and month
+                Collectors.averagingDouble(Score::getScoreValue)
+            ))
+            .entrySet().stream()
+            .map(entry -> new MonthlyPerformanceDTO(
+                entry.getKey().format(DateTimeFormatter.ofPattern("yyyy-MM")),
+                entry.getValue()
+            ))
+            .sorted(Comparator.comparing(MonthlyPerformanceDTO::month))
             .collect(Collectors.toList());
     }
     public ByteArrayInputStream generateQuizResultPdf(QuizResultDTO result, String language) {
@@ -137,19 +197,23 @@ public class ScoreService {
 
             int questionNumber = 1;
             for (AnsweredQuestionDTO answeredQuestion : result.answeredQuestions()) {
-                document.add(new Paragraph(questionNumber++ + ". " + answeredQuestion.questionText()).setFont(font).setBold());
+                String questionText = isTamil ? answeredQuestion.questionText_ta() : answeredQuestion.questionText_en();
+                document.add(new Paragraph(questionNumber++ + ". " + questionText).setFont(font).setBold());
 
                 if (answeredQuestion.isCorrect()) {
                     String correctText = isTamil ? "உங்கள் பதில் சரி: " : "Your correct answer: ";
-                    document.add(new Paragraph(correctText + answeredQuestion.userAnswer())
+                    String userAnswerText = isTamil ? answeredQuestion.userAnswer_ta() : answeredQuestion.userAnswer();
+                    document.add(new Paragraph(correctText + userAnswerText)
  .setFont(font).setFontColor(ColorConstants.GREEN));
                 } else {
                     String wrongText = isTamil ? "உங்கள் தவறான பதில்: " : "Your incorrect answer: ";
-                    document.add(new Paragraph(wrongText + answeredQuestion.userAnswer())
+                    String userAnswerText = isTamil ? answeredQuestion.userAnswer_ta() : answeredQuestion.userAnswer();
+                    document.add(new Paragraph(wrongText + userAnswerText)
                         .setFont(font).setFontColor(ColorConstants.RED));
 
                     String correctText = isTamil ? "சரியான பதில்: " : "Correct answer: ";
-                    document.add(new Paragraph(correctText + answeredQuestion.correctAnswer())
+                    String correctAnswerText = isTamil ? answeredQuestion.correctAnswer_ta() : answeredQuestion.correctAnswer();
+                    document.add(new Paragraph(correctText + correctAnswerText)
                         .setFont(font).setFontColor(ColorConstants.GREEN));
                 }
                 document.add(new Paragraph("\n"));
@@ -172,9 +236,9 @@ public class ScoreService {
         }
 
         // Deserialize the stored JSON back into a list of answered questions
-        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), new TypeToken<List<AnsweredQuestionDTO>>(){}.getType());
+        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), answeredQuestionListType);
 
-        QuizResultDTO resultDTO = new QuizResultDTO(score.getId(), score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), score.getScoreValue(), answeredQuestions);
+        QuizResultDTO resultDTO = new QuizResultDTO(score.getId(), score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), score.getScoreValue(), score.getTotalQuestions(), answeredQuestions, user.getId(), user.getUsername());
 
         // Now that we have the full result DTO, we can generate the PDF
         return generateQuizResultPdf(resultDTO, lang);
@@ -196,7 +260,7 @@ public class ScoreService {
             throw new org.springframework.security.access.AccessDeniedException("You are not authorized to view this score.");
         }
 
-        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), new TypeToken<List<AnsweredQuestionDTO>>(){}.getType());
-        return new QuizResultDTO(score.getId(), score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), score.getScoreValue(), answeredQuestions);
+        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), answeredQuestionListType);
+        return new QuizResultDTO(score.getId(), score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), score.getScoreValue(), score.getTotalQuestions(), answeredQuestions, user.getId(), user.getUsername());
     }
 }

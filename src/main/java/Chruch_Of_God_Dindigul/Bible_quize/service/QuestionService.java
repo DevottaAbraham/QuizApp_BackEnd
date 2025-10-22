@@ -2,6 +2,7 @@ package Chruch_Of_God_Dindigul.Bible_quize.service;
 
 import Chruch_Of_God_Dindigul.Bible_quize.dto.QuestionDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.model.Question;
+import Chruch_Of_God_Dindigul.Bible_quize.model.Score;
 import Chruch_Of_God_Dindigul.Bible_quize.model.User;
 import Chruch_Of_God_Dindigul.Bible_quize.repository.QuestionRepository;
 import com.google.gson.Gson;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Type;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -20,10 +22,12 @@ import java.util.stream.Collectors;
 public class QuestionService {
 
     private final QuestionRepository questionRepository;
+    private final ScoreService scoreService;
 
     @Autowired
-    public QuestionService(QuestionRepository questionRepository) {
+    public QuestionService(QuestionRepository questionRepository, ScoreService scoreService) {
         this.questionRepository = questionRepository;
+        this.scoreService = scoreService;
     }
 
     private final Gson gson = new Gson();
@@ -241,8 +245,8 @@ public class QuestionService {
         // 2. Filter them to only include questions where the current time is after the releaseDate and before the disappearDate.
         // 3. Convert the final list of questions to DTOs to be sent to the frontend.
         return questionRepository.findByStatus("published").stream()
-                .filter(q -> q.getReleaseDate() != null && q.getDisappearDate() != null && 
-                             !now.isBefore(q.getReleaseDate()) && !now.isAfter(q.getDisappearDate()))
+                .filter(q -> q.getReleaseDate() != null && q.getDisappearDate() != null &&
+                             (now.isEqual(q.getReleaseDate()) || now.isAfter(q.getReleaseDate())) && now.isBefore(q.getDisappearDate()))
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }

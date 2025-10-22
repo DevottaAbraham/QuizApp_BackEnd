@@ -15,15 +15,20 @@ public class Score {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false)
+    // This annotation maps the 'scoreValue' field to the 'score' column in the database.
+    @Column(name = "score", nullable = false)
     private Integer scoreValue;
 
     @Column(nullable = false)
     private LocalDateTime quizDate;
 
-    // This field was missing from the entity, causing data integrity errors on save.
+    // This field was missing from the entity, causing data integrity errors on save. It must match the column name in your database schema.
     @Column(name = "answered_questions_json", columnDefinition = "TEXT")
-    private String answeredQuestionsJson; 
+    private String answeredQuestionsJson;
+
+    // This field corresponds to the 'total' column in the database.
+    @Column(name = "total", nullable = false)
+    private Integer totalQuestions;
 
     // Getters and Setters
 
@@ -65,5 +70,13 @@ public class Score {
 
     public void setAnsweredQuestionsJson(String answeredQuestionsJson) {
         this.answeredQuestionsJson = answeredQuestionsJson;
+    }
+
+    public Integer getTotalQuestions() {
+        return totalQuestions;
+    }
+
+    public void setTotalQuestions(Integer totalQuestions) {
+        this.totalQuestions = totalQuestions;
     }
 }

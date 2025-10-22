@@ -73,7 +73,7 @@ public class ScoreController {
      */
     @GetMapping("/history/{scoreId}/download")
     public ResponseEntity<InputStreamResource> downloadQuizResultPdf(
-            @PathVariable Long scoreId,
+            @PathVariable("scoreId") Long scoreId,
             @RequestParam(defaultValue = "en") String lang,
             Authentication authentication) {
         User currentUser = (User) authentication.getPrincipal();
