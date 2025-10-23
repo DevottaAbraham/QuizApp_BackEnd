@@ -37,6 +37,10 @@ public class User implements UserDetails {
     @Column(name = "refresh_token", length = 512)
     private String refreshToken;
 
+    @Column(name = "must_change_password")
+    @Builder.Default
+    private boolean mustChangePassword = false;
+    
     /**
      * This is the critical method that provides the user's role to Spring Security.
      * It must return a collection of GrantedAuthority objects.

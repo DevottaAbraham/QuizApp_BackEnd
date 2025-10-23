@@ -12,6 +12,8 @@ import Chruch_Of_God_Dindigul.Bible_quize.model.Role;
 import Chruch_Of_God_Dindigul.Bible_quize.model.User;
 import Chruch_Of_God_Dindigul.Bible_quize.service.QuestionService;
 import Chruch_Of_God_Dindigul.Bible_quize.service.UserService;
+import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.security.core.context.SecurityContextHolder;
 import Chruch_Of_God_Dindigul.Bible_quize.service.ScoreService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,7 @@ class Admincontroller {
     private final QuestionService questionService;
     private final HomePageContentService homePageContentService;
     private final ScoreService scoreService;
+    @Value("${application.security.admin-setup-token}") private String adminSetupToken;
 
     @Autowired
     public Admincontroller(UserService userService, PasswordEncoder passwordEncoder, QuestionService questionService, HomePageContentService homePageContentService, ScoreService scoreService) {
@@ -146,6 +149,16 @@ class Admincontroller {
     }
 
     /**
+     * Gets the overall monthly performance data across all users.
+     * This is for the main chart on the admin "View Scores" page.
+     */
+    @GetMapping("/scores/monthly-performance")
+    public ResponseEntity<List<MonthlyPerformanceDTO>> getMonthlyPerformance() {
+        List<MonthlyPerformanceDTO> performanceData = scoreService.getMonthlyPerformance();
+        return ResponseEntity.ok(performanceData);
+    }
+
+    /**
      * Gets the leaderboard data.
      * This is now an admin-only endpoint.
      */
@@ -164,10 +177,12 @@ class Admincontroller {
         if (userService.findByUsername(registrationRequest.getUsername()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Username is already taken!"));
         }
-        User user = new User();
-        user.setUsername(registrationRequest.getUsername());
-        user.setPassword(passwordEncoder.encode(registrationRequest.getPassword()));
-        user.setRole(Role.ADMIN); // Always create an ADMIN
+        User user = User.builder()
+                .username(registrationRequest.getUsername())
+                .password(passwordEncoder.encode(registrationRequest.getPassword()))
+                .role(Role.ADMIN)
+                .build();
+
         User savedUser = userService.createUser(user);
         return new ResponseEntity<>(new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole()), HttpStatus.CREATED);
     }
@@ -176,11 +191,11 @@ class Admincontroller {
         if (userService.findByUsername(registrationRequest.getUsername()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Username is already taken!"));
         }
-        User user = new User();
-        user.setUsername(registrationRequest.getUsername());
-        user.setPassword(passwordEncoder.encode(registrationRequest.getPassword()));
-        // Enforce that this endpoint can only create users with the USER role.
-        user.setRole(Role.USER);
+        User user = User.builder()
+                .username(registrationRequest.getUsername())
+                .password(passwordEncoder.encode(registrationRequest.getPassword()))
+                .role(Role.USER)
+                .build();
 
         User savedUser = userService.createUser(user);
         UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole());
@@ -255,6 +270,9 @@ class Admincontroller {
         if (registrationRequest.getRole() != null) {
             userToUpdate.setRole(registrationRequest.getRole());
         }
+        // FINAL FIX: Explicitly set the mustChangePassword field during an update
+        // to prevent it from ever being considered null by the persistence context.
+        userToUpdate.setMustChangePassword(registrationRequest.isMustChangePassword());
 
         // 4. Save the updated user and return it.
         User savedUser = userService.updateUser(userToUpdate);
@@ -273,18 +291,61 @@ class Admincontroller {
             return ResponseEntity.notFound().build();
         }
         User user = userOptional.get();
-
-        if (user.getRole() == Role.ADMIN) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Cannot reset password for an admin account."));
+        
+        // Allow admins to reset other admins' passwords, but not their own.
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        User currentUser = (User) authentication.getPrincipal();
+        if (currentUser.getId().equals(id)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "You cannot reset your own password using this tool."));
         }
 
         String newPassword = UUID.randomUUID().toString().substring(0, 8);
         user.setPassword(passwordEncoder.encode(newPassword));
+        
+        // Force the user to change their password on next login
+        user.setMustChangePassword(true);
+
         userService.updateUser(user);
 
         logger.info("Password for user '{}' has been reset by an admin.", user.getUsername());
 
         return ResponseEntity.ok(Map.of("message", "Password reset successfully.", "newPassword", newPassword));
+    }
+
+    /**
+     * A secure endpoint for an admin to reset their own or another admin's password.
+     * Requires the server's admin-setup-token for authorization.
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> adminForgotPassword(@RequestBody Map<String, String> payload) {
+        String username = payload.get("username");
+        String providedToken = payload.get("adminSetupToken");
+
+        // 1. Validate the provided token against the server's secret token.
+        if (providedToken == null || !providedToken.equals(this.adminSetupToken)) {
+            logger.warn("Admin forgot password attempt failed for user '{}' due to invalid token.", username);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid authorization token."));
+        }
+
+        // 2. Find the user and ensure they are an admin.
+        Optional<User> userOptional = userService.findByUsername(username);
+        if (userOptional.isEmpty() || userOptional.get().getRole() != Role.ADMIN) {
+            logger.warn("Admin forgot password attempt for non-existent or non-admin user: {}", username);
+            // Return a generic success message to prevent username enumeration.
+            return ResponseEntity.ok(Map.of("message", "If a matching admin account is found, the password will be reset."));
+        }
+
+        User user = userOptional.get();
+
+        // 3. Generate a new password and force a change on next login.
+        String newPassword = UUID.randomUUID().toString().substring(0, 8);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(true);
+        userService.updateUser(user);
+
+        logger.info("Password for ADMIN user '{}' has been reset via the secure forgot-password endpoint.", username);
+
+        return ResponseEntity.ok(Map.of("message", "Admin password has been reset.", "newPassword", newPassword));
     }
 
     // --- Content Management Endpoints ---

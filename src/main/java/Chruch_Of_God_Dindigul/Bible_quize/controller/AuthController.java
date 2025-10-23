@@ -99,7 +99,13 @@ public class AuthController {
 
             // The frontend will receive this response. It MUST check the 'role' field
             // to decide whether to redirect to the admin dashboard or the user page.
-            return ResponseEntity.ok(new LoginResponse(user.getId(), user.getUsername(), user.getRole(), null, null));
+            LoginResponse loginResponse = new LoginResponse(
+                user.getId(), 
+                user.getUsername(), 
+                user.getRole(), 
+                user.isMustChangePassword() // Pass the flag to the frontend
+            );
+            return ResponseEntity.ok(loginResponse);
 
         } catch (AuthenticationException e) {
             logger.warn("Login failed for user {}: {}", loginRequest.getUsername(), e.getMessage());
@@ -118,17 +124,19 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Username is already taken!"));
         }
 
-        // NEW LOGIC: The first user to ever register becomes the site administrator.
-        // All subsequent users will be regular users.
-        boolean isFirstUser = userService.countAllUsers() == 0;
-        Role userRole = isFirstUser ? Role.ADMIN : Role.USER;
+        // NEW, MORE ROBUST LOGIC:
+        // If no admins exist in the system, this new user MUST be an admin.
+        // This correctly handles both initial setup and re-setup after all admins are deleted.
+        boolean noAdminsExist = userService.countUsersByRole(Role.ADMIN) == 0;
+        Role userRole = noAdminsExist ? Role.ADMIN : Role.USER;
 
         logger.info("Registering new user '{}' with role {}", registrationRequest.getUsername(), userRole);
 
-        User user = new User();
-        user.setUsername(registrationRequest.getUsername());
-        user.setPassword(passwordEncoder.encode(registrationRequest.getPassword()));
-        user.setRole(userRole);
+        User user = User.builder()
+                .username(registrationRequest.getUsername())
+                .password(passwordEncoder.encode(registrationRequest.getPassword()))
+                .role(userRole)
+                .build();
 
         User savedUser = userService.createUser(user);
 
@@ -150,39 +158,90 @@ public class AuthController {
         addTokenCookie(response, "accessToken", accessToken, (int) (jwtService.getAccessTokenExpiration() / 1000));
         addTokenCookie(response, "refreshToken", refreshToken, (int) (jwtService.getRefreshTokenExpiration() / 1000));
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(new LoginResponse(savedUser.getId(), savedUser.getUsername(), savedUser.getRole(), null, null));
+        LoginResponse loginResponse = new LoginResponse(
+            savedUser.getId(), 
+            savedUser.getUsername(), 
+            savedUser.getRole(), 
+            savedUser.isMustChangePassword()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(loginResponse);
     }
 
-    @PostMapping("/forgot-password-generate-temp")
-    public ResponseEntity<?> forgotPasswordGenerateTemp(@RequestBody Map<String, String> payload) {
-        String username = payload.get("username");
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Username is required."));
+    /**
+     * Handles the creation of an admin account during the initial setup phase.
+     * This endpoint ensures that any user created through it is assigned the ADMIN role.
+     * It is protected by checking if any admins already exist. If they do, this endpoint
+     * will not allow the creation of another admin to prevent misuse after setup.
+     */
+    @PostMapping("/register-admin")
+    public ResponseEntity<?> registerAdmin(@RequestBody RegistrationRequest registrationRequest, HttpServletResponse response) {
+        // SECURITY: This endpoint should only function if no admins exist.
+        if (userService.countUsersByRole(Role.ADMIN) > 0) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Setup is already complete. Cannot create new admin."));
         }
 
+        if (userService.findByUsername(registrationRequest.getUsername()).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Username is already taken!"));
+        }
+
+        logger.info("Registering new ADMIN user '{}' via setup page.", registrationRequest.getUsername());
+        User user = User.builder()
+                .username(registrationRequest.getUsername())
+                .password(passwordEncoder.encode(registrationRequest.getPassword()))
+                .role(Role.ADMIN) // Always create an ADMIN
+                .build();
+        User savedUser = userService.createUser(user);
+
+        // Automatically log the new admin in
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("authorities", List.of("ROLE_ADMIN"));
+        String accessToken = jwtService.generateAccessToken(claims, savedUser);
+        String refreshToken = jwtService.generateRefreshToken(savedUser);
+        savedUser.setRefreshToken(refreshToken);
+        userService.updateUser(savedUser);
+
+        addTokenCookie(response, "accessToken", accessToken, (int) (jwtService.getAccessTokenExpiration() / 1000));
+        addTokenCookie(response, "refreshToken", refreshToken, (int) (jwtService.getRefreshTokenExpiration() / 1000));
+
+        LoginResponse loginResponse = new LoginResponse(savedUser.getId(), savedUser.getUsername(), savedUser.getRole(), savedUser.isMustChangePassword());
+        return ResponseEntity.status(HttpStatus.CREATED).body(loginResponse);
+    }
+
+    /**
+     * A secure endpoint for an admin to reset their own or another admin's password.
+     * This is a public endpoint, but it's protected by requiring the admin-setup-token
+     * in the request body, which is validated on the server.
+     */
+    @PostMapping("/admin-forgot-password")
+    public ResponseEntity<?> adminForgotPassword(@RequestBody Map<String, String> payload) {
+        String username = payload.get("username");
+        String providedToken = payload.get("adminSetupToken");
+
+        // 1. Validate the provided token against the server's secret token.
+        if (providedToken == null || !providedToken.equals(this.adminSetupToken)) {
+            logger.warn("Admin forgot password attempt failed for user '{}' due to invalid token.", username);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid authorization token."));
+        }
+
+        // 2. Find the user and ensure they are an admin.
         Optional<User> userOptional = userService.findByUsername(username);
-        if (userOptional.isEmpty()) {
-            // For security, always return a generic message to avoid username enumeration
-            logger.warn("Forgot password attempt for non-existent user: {}", username);
-            return ResponseEntity.ok(Map.of("message", "If a matching account is found, a new password will be displayed."));
+        if (userOptional.isEmpty() || userOptional.get().getRole() != Role.ADMIN) {
+            logger.warn("Admin forgot password attempt for non-existent or non-admin user: {}", username);
+            // Return a generic success message to prevent username enumeration.
+            return ResponseEntity.ok(Map.of("message", "If a matching admin account is found, the password will be reset."));
         }
 
         User user = userOptional.get();
 
-        // SECURITY FIX: Prevent this public endpoint from being used on ADMIN accounts.
-        if (user.getRole() == Role.ADMIN) {
-            logger.warn("Attempted to use public forgot-password for ADMIN account '{}'. This is not allowed.", username);
-            return ResponseEntity.ok(Map.of("message", "For security reasons, administrator passwords cannot be reset using this form. Please contact another administrator."));
-        }
-
-        String newPassword = UUID.randomUUID().toString().substring(0, 8); // Generate an 8-character random password
+        // 3. Generate a new password and force a change on next login.
+        String newPassword = UUID.randomUUID().toString().substring(0, 8);
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(true);
         userService.updateUser(user);
 
-        logger.info("Temporary password generated for user: {}", username);
+        logger.info("Password for ADMIN user '{}' has been reset via the secure forgot-password endpoint.", username);
 
-        // WARNING: Returning the plain-text password directly is INSECURE for production.
-        return ResponseEntity.ok(Map.of("message", "A new temporary password has been generated.", "newPassword", newPassword));
+        return ResponseEntity.ok(Map.of("message", "Admin password has been reset.", "newPassword", newPassword));
     }
 
     @GetMapping("/setup-status")
@@ -305,4 +364,35 @@ public class AuthController {
         return ResponseEntity.ok(userDTO);
     }
 
+    @PostMapping("/force-change-password")
+    public ResponseEntity<?> forceChangePassword(@RequestBody Map<String, String> payload, Authentication authentication) {
+        String oldPassword = payload.get("oldPassword");
+        String newPassword = payload.get("newPassword");
+        String confirmPassword = payload.get("confirmPassword");
+
+        if (newPassword == null || newPassword.isBlank() || !newPassword.equals(confirmPassword)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "New passwords do not match or are empty."));
+        }
+
+        User currentUser = (User) authentication.getPrincipal();
+
+        // Check if the old password (the temporary one) is correct
+        if (!passwordEncoder.matches(oldPassword, currentUser.getPassword())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "The temporary password is not correct."));
+        }
+
+        // Check if the user is actually required to change their password
+        if (!currentUser.isMustChangePassword()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "You are not required to change your password."));
+        }
+
+        // Update the password and reset the flag
+        currentUser.setPassword(passwordEncoder.encode(newPassword));
+        currentUser.setMustChangePassword(false);
+        userService.updateUser(currentUser);
+
+        logger.info("User '{}' successfully changed their password after a forced reset.", currentUser.getUsername());
+
+        return ResponseEntity.ok(Map.of("message", "Password changed successfully. You can now log in with your new password."));
+    }
 }

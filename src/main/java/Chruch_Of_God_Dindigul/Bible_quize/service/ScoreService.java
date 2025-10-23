@@ -22,6 +22,7 @@ import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Type;
 import java.io.ByteArrayInputStream;
@@ -49,7 +50,9 @@ public class ScoreService {
     }
 
     public List<LeaderboardDTO> getLeaderboard() {
-        return scoreRepository.findLeaderboard();
+        // Assuming findLeaderboard returns a list already sorted by total score descending
+        // Limit to top 5
+        return scoreRepository.findLeaderboard().stream().limit(5).collect(Collectors.toList());
     }
 
     public ByteArrayInputStream generateLeaderboardPpt(List<LeaderboardDTO> leaderboard) {
@@ -128,6 +131,7 @@ public class ScoreService {
         return scoreRepository.findByUserAndQuizDateAfter(user, since);
     }
 
+    @Transactional(readOnly = true)
     public List<QuizResultDTO> getAllScores() {
         return scoreRepository.findAllByOrderByQuizDateDesc().stream()
             .map(score -> {
@@ -186,7 +190,7 @@ public class ScoreService {
 
             boolean isTamil = "ta".equalsIgnoreCase(language);
             var font = isTamil
-                ? PdfFontFactory.createFont("fonts/NotoSansTamil-Regular.ttf", com.itextpdf.io.font.PdfEncodings.IDENTITY_H)
+                ? PdfFontFactory.createFont("classpath:fonts/NotoSansTamil-Regular.ttf", com.itextpdf.io.font.PdfEncodings.IDENTITY_H)
                 : PdfFontFactory.createFont(StandardFonts.HELVETICA);
 
             String titleText = isTamil ? "தேர்வு முடிவுகள்" : "Quiz Results";

@@ -125,7 +125,7 @@
 		<dependency>
 			<groupId>com.itextpdf</groupId>
 			<artifactId>layout</artifactId>
-			<version>7.2.5</version>
+			<version>8.0.4</version> <!-- Bumping version to force a dependency refresh and project rebuild -->
 		</dependency>
 
 		<!-- For PowerPoint Generation -->

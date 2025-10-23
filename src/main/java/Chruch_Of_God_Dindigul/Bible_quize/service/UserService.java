@@ -57,7 +57,7 @@ public class UserService implements UserDetailsService { // Corrected filename t
 
 
     public List<UserDTO> findActiveUsers() {
-        return userRepository.findByRefreshTokenIsNotNull().stream()
+        return userRepository.findActiveUsers().stream()
                 .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole()))
                 .collect(Collectors.toList());
     }
