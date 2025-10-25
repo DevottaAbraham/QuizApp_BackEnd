@@ -2,6 +2,7 @@ package Chruch_Of_God_Dindigul.Bible_quize.service;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.io.Decoders;
 import java.security.Key;
 import javax.crypto.SecretKey;
@@ -70,6 +71,21 @@ public class JwtService {
     // ✅ Extract username from token
     public String extractUsername(String token) {
         return extractAllClaims(token).getSubject();
+    }
+
+    /**
+     * Extracts the username from a JWT, even if the token is expired.
+     * This is useful for operations like logging out, where we need to identify
+     * the user to invalidate their session even with an expired token.
+     * @param token The JWT token.
+     * @return The username from the token, or null if parsing fails for other reasons.
+     */
+    public String extractUsernameIgnoringExpiration(String token) {
+        try {
+            return extractUsername(token);
+        } catch (ExpiredJwtException e) {
+            return e.getClaims().getSubject();
+        }
     }
 
     // ✅ Check if token is expired

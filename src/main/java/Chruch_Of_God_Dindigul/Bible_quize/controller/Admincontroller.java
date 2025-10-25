@@ -135,16 +135,40 @@ class Admincontroller {
     }
 
     /**
+     * Gets the details for a single user by their ID.
+     * This is used by the admin frontend to get user details for display.
+     *
+     * @param userId The ID of the user to retrieve.
+     * @return A DTO with the user's information.
+     */
+    @GetMapping(value = "/users/{userId}", produces = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<UserDTO> getUserById(@PathVariable Long userId) {
+        logger.info("Admincontroller: Received GET request for user details with ID: {}", userId);
+        return userService.findById(userId)
+                .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole(), user.isMustChangePassword()))
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> {
+                    logger.warn("Admincontroller: User with ID {} not found.", userId);
+                    return ResponseEntity.notFound().build();
+                });
+    }
+
+    /**
      * Gets the monthly performance data for a specific user.
      * This data is structured to be easily used by frontend charting libraries for animation.
      * @param userId The ID of the user.
      * @return A list of objects, each containing a month and the user's average score percentage for that month.
      */
     @GetMapping("/users/{userId}/performance")
-    public ResponseEntity<List<MonthlyPerformanceDTO>> getUserPerformance(@PathVariable Long userId) {
+    public ResponseEntity<List<MonthlyPerformanceDTO>> getUserPerformance(@PathVariable Long userId) { // Removed produces for now, as it's not the core issue
+        logger.info("Admincontroller: Received GET request for user performance with ID: {}", userId);
         User user = userService.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+                .orElseThrow(() -> {
+                    logger.warn("Admincontroller: User with ID {} not found for performance request.", userId);
+                    return new RuntimeException("User not found with id: " + userId);
+                });
         List<MonthlyPerformanceDTO> performanceData = scoreService.getMonthlyPerformanceForUser(user);
+        logger.info("Admincontroller: Returning performance data for user ID: {}", userId);
         return ResponseEntity.ok(performanceData);
     }
 
@@ -156,16 +180,6 @@ class Admincontroller {
     public ResponseEntity<List<MonthlyPerformanceDTO>> getMonthlyPerformance() {
         List<MonthlyPerformanceDTO> performanceData = scoreService.getMonthlyPerformance();
         return ResponseEntity.ok(performanceData);
-    }
-
-    /**
-     * Gets the leaderboard data.
-     * This is now an admin-only endpoint.
-     */
-    @GetMapping("/leaderboard")
-    public ResponseEntity<List<LeaderboardDTO>> getLeaderboard() {
-        List<LeaderboardDTO> leaderboard = scoreService.getLeaderboard();
-        return ResponseEntity.ok(leaderboard);
     }
 
     /**
@@ -184,7 +198,7 @@ class Admincontroller {
                 .build();
 
         User savedUser = userService.createUser(user);
-        return new ResponseEntity<>(new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole()), HttpStatus.CREATED);
+        return new ResponseEntity<>(new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole(), savedUser.isMustChangePassword()), HttpStatus.CREATED);
     }
     @PostMapping("/users")
     public ResponseEntity<?> createUser(@RequestBody RegistrationRequest registrationRequest, Authentication authentication) {
@@ -198,7 +212,7 @@ class Admincontroller {
                 .build();
 
         User savedUser = userService.createUser(user);
-        UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole());
+        UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole(), savedUser.isMustChangePassword());
         return new ResponseEntity<>(userDTO, HttpStatus.CREATED);
     }
 
@@ -276,7 +290,7 @@ class Admincontroller {
 
         // 4. Save the updated user and return it.
         User savedUser = userService.updateUser(userToUpdate);
-        UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole());
+        UserDTO userDTO = new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole(), savedUser.isMustChangePassword());
         return ResponseEntity.ok(userDTO);
     }
 
@@ -310,42 +324,6 @@ class Admincontroller {
         logger.info("Password for user '{}' has been reset by an admin.", user.getUsername());
 
         return ResponseEntity.ok(Map.of("message", "Password reset successfully.", "newPassword", newPassword));
-    }
-
-    /**
-     * A secure endpoint for an admin to reset their own or another admin's password.
-     * Requires the server's admin-setup-token for authorization.
-     */
-    @PostMapping("/forgot-password")
-    public ResponseEntity<?> adminForgotPassword(@RequestBody Map<String, String> payload) {
-        String username = payload.get("username");
-        String providedToken = payload.get("adminSetupToken");
-
-        // 1. Validate the provided token against the server's secret token.
-        if (providedToken == null || !providedToken.equals(this.adminSetupToken)) {
-            logger.warn("Admin forgot password attempt failed for user '{}' due to invalid token.", username);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid authorization token."));
-        }
-
-        // 2. Find the user and ensure they are an admin.
-        Optional<User> userOptional = userService.findByUsername(username);
-        if (userOptional.isEmpty() || userOptional.get().getRole() != Role.ADMIN) {
-            logger.warn("Admin forgot password attempt for non-existent or non-admin user: {}", username);
-            // Return a generic success message to prevent username enumeration.
-            return ResponseEntity.ok(Map.of("message", "If a matching admin account is found, the password will be reset."));
-        }
-
-        User user = userOptional.get();
-
-        // 3. Generate a new password and force a change on next login.
-        String newPassword = UUID.randomUUID().toString().substring(0, 8);
-        user.setPassword(passwordEncoder.encode(newPassword));
-        user.setMustChangePassword(true);
-        userService.updateUser(user);
-
-        logger.info("Password for ADMIN user '{}' has been reset via the secure forgot-password endpoint.", username);
-
-        return ResponseEntity.ok(Map.of("message", "Admin password has been reset.", "newPassword", newPassword));
     }
 
     // --- Content Management Endpoints ---

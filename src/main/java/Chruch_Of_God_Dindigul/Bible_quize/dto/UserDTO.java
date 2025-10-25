@@ -7,11 +7,17 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class UserDTO {
     private Long id;
     private String username;
     private Role role;
+    private boolean mustChangePassword; // Add this field
 
-    // Note: The password is intentionally excluded for security.
+    // Add a constructor that includes the mustChangePassword field
+    public UserDTO(Long id, String username, Role role, boolean mustChangePassword) {
+        this.id = id;
+        this.username = username;
+        this.role = role;
+        this.mustChangePassword = mustChangePassword;
+    }
 }

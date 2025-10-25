@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import jakarta.servlet.http.Cookie;
@@ -309,23 +310,41 @@ public class AuthController {
         }
 
         if (refreshToken == null) {
+            logger.warn("Refresh token not found in cookies during refresh attempt.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Refresh token not found."));
         }
 
+        String username = null; // Declare username outside the try block for the catch block
         try {
-            String username = jwtService.extractUsername(refreshToken);
+            username = jwtService.extractUsername(refreshToken);
+            logger.info("Attempting to refresh token for user: {}", username);
             User user = (User) userService.loadUserByUsername(username);
 
-            if (refreshToken.equals(user.getRefreshToken()) && !jwtService.isTokenExpired(refreshToken)) {
-                Map<String, Object> claims = Map.of("authorities", user.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()));
-                String newAccessToken = jwtService.generateAccessToken(claims, user);
-                addTokenCookie(response, "accessToken", newAccessToken, (int) (jwtService.getAccessTokenExpiration() / 1000));
-                return ResponseEntity.ok(Map.of("message", "Token refreshed successfully."));
+            // 1. Check if the token from the cookie matches the one in the database
+            if (!refreshToken.equals(user.getRefreshToken())) {
+                logger.warn("Refresh token mismatch for user {}. Token in cookie was present but did not match database.", username);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid refresh token."));
             }
+
+            // 2. Check if the token itself is expired
+            if (jwtService.isTokenExpired(refreshToken)) {
+                logger.warn("Refresh token for user {} is expired.", username);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Refresh token expired."));
+            }
+
+            // All checks passed, generate a new access token
+            Map<String, Object> claims = Map.of("authorities", user.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()));
+            String newAccessToken = jwtService.generateAccessToken(claims, user);
+            addTokenCookie(response, "accessToken", newAccessToken, (int) (jwtService.getAccessTokenExpiration() / 1000));
+            
+            logger.info("Token refreshed successfully for user '{}'.", username);
+            return ResponseEntity.ok(Map.of("message", "Token refreshed successfully."));
+
         } catch (Exception e) {
-            // Catches any JWT parsing errors or other issues
+            // This will catch errors from extractUsername or loadUserByUsername
+            logger.error("Error during refresh token process for user: {}. Error: {}", username, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid or expired refresh token."));
         }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid or expired refresh token."));
     }
 
     /**
@@ -352,15 +371,15 @@ public class AuthController {
      * @return A DTO with the current user's information.
      */
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()") // Allow any authenticated user to get their own details
     public ResponseEntity<UserDTO> getCurrentAuthenticatedUser(Authentication authentication) {
-        // CRITICAL FIX: Check if the user is actually authenticated.
-        // If not, return a 401 Unauthorized response instead of crashing.
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+        if (authentication == null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof User)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         User currentUser = (User) authentication.getPrincipal();
-        UserDTO userDTO = new UserDTO(currentUser.getId(), currentUser.getUsername(), currentUser.getRole());
+        // Pass the mustChangePassword flag to the frontend
+        UserDTO userDTO = new UserDTO(currentUser.getId(), currentUser.getUsername(), currentUser.getRole(), currentUser.isMustChangePassword());
         return ResponseEntity.ok(userDTO);
     }
 

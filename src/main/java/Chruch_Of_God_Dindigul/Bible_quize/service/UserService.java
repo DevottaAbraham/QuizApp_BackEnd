@@ -51,14 +51,14 @@ public class UserService implements UserDetailsService { // Corrected filename t
 
     public List<UserDTO> findAllUsersAsDTO() {
         return userRepository.findAll().stream()
-                .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole()))
+                .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole(), user.isMustChangePassword()))
                 .collect(Collectors.toList());
     }
 
 
     public List<UserDTO> findActiveUsers() {
         return userRepository.findActiveUsers().stream()
-                .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole()))
+                .map(user -> new UserDTO(user.getId(), user.getUsername(), user.getRole(), user.isMustChangePassword()))
                 .collect(Collectors.toList());
     }
 

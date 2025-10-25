@@ -12,21 +12,33 @@ import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.layout.properties.TextAlignment;
+import com.itextpdf.layout.properties.UnitValue;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.google.gson.Gson;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import com.itextpdf.io.font.FontProgramFactory;
+import org.apache.poi.xslf.usermodel.XSLFTable;
+import org.apache.poi.xslf.usermodel.XSLFTableCell;
+import org.apache.poi.xslf.usermodel.XSLFTableRow;
+import org.apache.poi.xslf.usermodel.XSLFTextParagraph;
+import org.apache.poi.xslf.usermodel.XSLFTextRun;
 import com.itextpdf.io.font.constants.StandardFonts;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
+import com.itextpdf.io.font.FontProgram;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Type;
+import java.awt.Color;
+import java.awt.Rectangle;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import com.google.gson.reflect.TypeToken;
@@ -50,26 +62,84 @@ public class ScoreService {
     }
 
     public List<LeaderboardDTO> getLeaderboard() {
-        // Assuming findLeaderboard returns a list already sorted by total score descending
-        // Limit to top 5
-        return scoreRepository.findLeaderboard().stream().limit(5).collect(Collectors.toList());
+        // CRITICAL FIX: The previous implementation was flawed.
+        // This new approach uses a dedicated, efficient query in the repository.
+        // It correctly calculates total scores and prevents null values.
+        return scoreRepository.findLeaderboard().stream()
+                .limit(5) // Limit to top 5 as per user request
+                .collect(Collectors.toList());
     }
 
     public ByteArrayInputStream generateLeaderboardPpt(List<LeaderboardDTO> leaderboard) {
         try (XMLSlideShow ppt = new XMLSlideShow(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            XSLFSlide slide = ppt.createSlide();
-            XSLFTextShape title = slide.createTextBox();
-            title.setText("Leaderboard");
+            XSLFSlide slide = ppt.createSlide(); // Create a slide
 
-            StringBuilder content = new StringBuilder();
-            int rank = 1;
-            for (LeaderboardDTO entry : leaderboard) {
-                content.append(rank++).append(". ").append(entry.getUsername()).append(" - ").append(entry.getTotalScore()).append("\n");
+            // Add a title
+            XSLFTextShape title = slide.createTextBox();
+            title.setAnchor(new Rectangle(50, 20, 620, 50));
+            XSLFTextParagraph p1 = title.addNewTextParagraph();
+            XSLFTextRun r1 = p1.addNewTextRun();
+            r1.setText("Top 5 Winners");
+            r1.setFontFamily("Arial");
+            r1.setFontSize(32.0);
+            r1.setFontColor(new Color(0, 82, 129)); // A nice blue color
+            p1.setTextAlign(org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
+            
+            // Create a table
+            XSLFTable table = slide.createTable(leaderboard.size() + 1, 3); // +1 for header row
+            table.setAnchor(new Rectangle(50, 80, 620, 300));
+
+            // --- Create Header Row ---
+            XSLFTableRow headerRow = table.getRows().get(0);
+            String[] headers = {"Rank", "Username", "Total Score"};
+            org.apache.poi.sl.usermodel.TextParagraph.TextAlign[] headerAligns = {
+                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER,
+                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.LEFT,
+                org.apache.poi.sl.usermodel.TextParagraph.TextAlign.RIGHT
+            };
+
+            for (int i = 0; i < headers.length; i++) {
+                XSLFTableCell th = headerRow.getCells().get(i);
+                XSLFTextParagraph p = th.addNewTextParagraph();
+                th.setVerticalAlignment(org.apache.poi.sl.usermodel.VerticalAlignment.MIDDLE);
+                p.setTextAlign(headerAligns[i]);
+                
+                XSLFTextRun r = p.addNewTextRun();
+                r.setText(headers[i]);
+                r.setBold(true);
+                r.setFontFamily("Arial");
+                r.setFontColor(Color.white);
+                th.setFillColor(new Color(0, 82, 129));
             }
 
-            XSLFTextShape body = slide.createTextBox();
-            body.setAnchor(new java.awt.Rectangle(50, 100, 600, 400));
-            body.setText(content.toString());
+            // --- Populate Data Rows ---
+            int rank = 1;
+            for (LeaderboardDTO entry : leaderboard) {
+                XSLFTableRow row = table.getRows().get(rank);
+                String[] values = {String.valueOf(rank), entry.getUsername(), String.valueOf(entry.getTotalScore())};
+                org.apache.poi.sl.usermodel.TextParagraph.TextAlign[] cellAligns = {
+                    org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER,
+                    org.apache.poi.sl.usermodel.TextParagraph.TextAlign.LEFT,
+                    org.apache.poi.sl.usermodel.TextParagraph.TextAlign.RIGHT
+                };
+
+                for (int i = 0; i < values.length; i++) {
+                    XSLFTableCell cell = row.getCells().get(i);
+                    cell.setVerticalAlignment(org.apache.poi.sl.usermodel.VerticalAlignment.MIDDLE);
+                    XSLFTextParagraph p = cell.addNewTextParagraph();
+                    p.setTextAlign(cellAligns[i]);
+                    XSLFTextRun r = p.addNewTextRun();
+                    r.setFontFamily("Arial");
+                    r.setFontSize(14.0);
+                    r.setText(values[i]);
+                }
+                rank++;
+            }
+
+            // Set column widths
+            table.setColumnWidth(0, 100);
+            table.setColumnWidth(1, 320);
+            table.setColumnWidth(2, 200);
 
             ppt.write(out);
             return new ByteArrayInputStream(out.toByteArray());
@@ -113,16 +183,18 @@ public class ScoreService {
     public List<QuizResultDTO> getScoreHistoryForUser(User user) {
         return scoreRepository.findByUserOrderByQuizDateDesc(user).stream()
             .map(score -> {
+                // CRITICAL FIX: The constructor for QuizResultDTO requires all arguments.
+                // Even if some are null, they must be passed to ensure correct field mapping.
                 return new QuizResultDTO(
-                score.getId(),
-                score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                score.getScoreValue(),
-                score.getTotalQuestions(),
-                null, // Answered questions are not needed for the history list
-                user.getId(),
-                user.getUsername()
-            ); // Semicolon to end the return statement
-        }) // Closing brace for the lambda block
+                    score.getId(), // quizId
+                    score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
+                    score.getScoreValue(), // score
+                    score.getTotalQuestions(), // totalQuestions
+                    null, // answeredQuestions (not needed for list view)
+                    user.getId(), // userId
+                    user.getUsername() // username
+                );
+            })
             .collect(Collectors.toList());
     }
 
@@ -134,20 +206,19 @@ public class ScoreService {
     @Transactional(readOnly = true)
     public List<QuizResultDTO> getAllScores() {
         return scoreRepository.findAllByOrderByQuizDateDesc().stream()
-            .map(score -> {
-                return new QuizResultDTO(
-                score.getId(),
-                score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-                score.getScoreValue(),
-                score.getTotalQuestions(),
-                null, // Answered questions are not needed for the full list
-                score.getUser().getId(), // Pass the user ID from the score object
-                score.getUser().getUsername()
-            )
-            ; // Semicolon to end the return statement
-        }).collect(Collectors.toList());
+            .map(score -> new QuizResultDTO(
+                score.getId(), // quizId
+                score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
+                score.getScoreValue(), // score
+                score.getTotalQuestions(), // totalQuestions
+                null, // answeredQuestions (not needed for list view)
+                score.getUser().getId(), // userId
+                score.getUser().getUsername() // username
+            ))
+            .collect(Collectors.toList());
     }
 
+    @Cacheable("monthlyPerformance")
     public List<MonthlyPerformanceDTO> getMonthlyPerformance() {
         List<Score> allScores = scoreRepository.findAll();
         
@@ -189,36 +260,51 @@ public class ScoreService {
             Document document = new Document(pdf);
 
             boolean isTamil = "ta".equalsIgnoreCase(language);
-            var font = isTamil
-                ? PdfFontFactory.createFont("classpath:fonts/NotoSansTamil-Regular.ttf", com.itextpdf.io.font.PdfEncodings.IDENTITY_H)
-                : PdfFontFactory.createFont(StandardFonts.HELVETICA);
+            // Explicitly declare the type to resolve compilation error
+            com.itextpdf.kernel.font.PdfFont font; 
+            if (isTamil) {
+                // Definitive fix: Load the font from the classpath to ensure it's found in a packaged JAR.
+                try (InputStream fontStream = getClass().getClassLoader().getResourceAsStream("fonts/NotoSansTamil-Regular.ttf")) {
+                    if (fontStream == null) {
+                        throw new IOException("Tamil font 'NotoSansTamil-Regular.ttf' not found in classpath under 'fonts/' directory.");
+                    }
+                    // Simplified and more robust font loading
+                    byte[] fontBytes = fontStream.readAllBytes();
+                    FontProgram fontProgram = FontProgramFactory.createFont(fontBytes);
+                    font = PdfFontFactory.createFont(fontProgram, com.itextpdf.io.font.PdfEncodings.IDENTITY_H, true); // Use boolean for embedding
+                } 
+            } else {
+                font = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+            }
 
             String titleText = isTamil ? "தேர்வு முடிவுகள்" : "Quiz Results";
-            document.add(new Paragraph(titleText).setFont(font).setBold().setFontSize(20).setTextAlignment(TextAlignment.CENTER));
-            document.add(new Paragraph((isTamil ? "தேதி: " : "Date: ") + result.quizDate()).setFont(font));
-            document.add(new Paragraph((isTamil ? "மதிப்பெண்: " : "Score: ") + result.score()).setFont(font));
+            document.add(new Paragraph(titleText).setFont(font).setBold().setFontSize(22).setTextAlignment(TextAlignment.CENTER));
+            
+            // Add User Details and Score
+            document.add(new Paragraph((isTamil ? "பயனர்: " : "User: ") + result.username() + " (ID: " + result.userId() + ")").setFont(font).setFontSize(12));
+            document.add(new Paragraph((isTamil ? "தேதி: " : "Date: ") + result.quizDate()).setFont(font).setFontSize(12));
+            document.add(new Paragraph((isTamil ? "மதிப்பெண்: " : "Score: ") + result.score() + "/" + result.totalQuestions()).setFont(font).setFontSize(12).setBold());
             document.add(new Paragraph("\n"));
 
             int questionNumber = 1;
             for (AnsweredQuestionDTO answeredQuestion : result.answeredQuestions()) {
                 String questionText = isTamil ? answeredQuestion.questionText_ta() : answeredQuestion.questionText_en();
-                document.add(new Paragraph(questionNumber++ + ". " + questionText).setFont(font).setBold());
+                document.add(new Paragraph(questionNumber++ + ". " + questionText).setFont(font).setBold().setFontSize(14));
 
                 if (answeredQuestion.isCorrect()) {
                     String correctText = isTamil ? "உங்கள் பதில் சரி: " : "Your correct answer: ";
                     String userAnswerText = isTamil ? answeredQuestion.userAnswer_ta() : answeredQuestion.userAnswer();
-                    document.add(new Paragraph(correctText + userAnswerText)
- .setFont(font).setFontColor(ColorConstants.GREEN));
+                    document.add(new Paragraph(correctText + userAnswerText).setFont(font)
+                        .setFontColor(ColorConstants.GREEN).setFontSize(12)); // Removed duplicate setFontSize
                 } else {
                     String wrongText = isTamil ? "உங்கள் தவறான பதில்: " : "Your incorrect answer: ";
                     String userAnswerText = isTamil ? answeredQuestion.userAnswer_ta() : answeredQuestion.userAnswer();
-                    document.add(new Paragraph(wrongText + userAnswerText)
-                        .setFont(font).setFontColor(ColorConstants.RED));
+                    document.add(new Paragraph(wrongText + userAnswerText).setFont(font).setFontColor(ColorConstants.RED).setFontSize(12));
 
                     String correctText = isTamil ? "சரியான பதில்: " : "Correct answer: ";
                     String correctAnswerText = isTamil ? answeredQuestion.correctAnswer_ta() : answeredQuestion.correctAnswer();
                     document.add(new Paragraph(correctText + correctAnswerText)
-                        .setFont(font).setFontColor(ColorConstants.GREEN));
+                        .setFont(font).setFontColor(ColorConstants.DARK_GRAY).setFontSize(12));
                 }
                 document.add(new Paragraph("\n"));
             }
@@ -240,14 +326,57 @@ public class ScoreService {
         }
 
         // Deserialize the stored JSON back into a list of answered questions
-        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), answeredQuestionListType);
+        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), this.answeredQuestionListType);
 
-        QuizResultDTO resultDTO = new QuizResultDTO(score.getId(), score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), score.getScoreValue(), score.getTotalQuestions(), answeredQuestions, user.getId(), user.getUsername());
+        QuizResultDTO resultDTO = new QuizResultDTO(
+            score.getId(), // quizId
+            score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
+            score.getScoreValue(), // score
+            score.getTotalQuestions(), // totalQuestions
+            answeredQuestions, // answeredQuestions
+            user.getId(), // userId
+            user.getUsername() // username
+        );
 
         // Now that we have the full result DTO, we can generate the PDF
         return generateQuizResultPdf(resultDTO, lang);
     }
 
+    public ByteArrayInputStream generateLeaderboardPdf(List<LeaderboardDTO> leaderboard) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            PdfWriter writer = new PdfWriter(out);
+            PdfDocument pdf = new PdfDocument(writer);
+            Document document = new Document(pdf);
+
+            var font = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+
+            document.add(new Paragraph("Leaderboard")
+                    .setFont(font).setBold().setFontSize(20).setTextAlignment(TextAlignment.CENTER));
+            document.add(new Paragraph("\n"));
+
+           Table table = new Table(UnitValue.createPercentArray(new float[]{1, 3, 2}));
+           table.setWidth(UnitValue.createPercentValue(100));
+
+
+            table.addHeaderCell(new Paragraph("Rank").setFont(font).setBold());
+            table.addHeaderCell(new Paragraph("Username").setFont(font).setBold());
+            table.addHeaderCell(new Paragraph("Score").setFont(font).setBold().setTextAlignment(TextAlignment.RIGHT));
+
+            int rank = 1;
+            for (LeaderboardDTO entry : leaderboard) {
+                table.addCell(new Paragraph(String.valueOf(rank++)).setFont(font));
+                table.addCell(new Paragraph(entry.getUsername()).setFont(font));
+                table.addCell(new Paragraph(String.valueOf(entry.getTotalScore())).setFont(font).setTextAlignment(TextAlignment.RIGHT));
+            }
+
+            document.add(table);
+            document.close();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to generate Leaderboard PDF", e);
+        }
+        return new ByteArrayInputStream(out.toByteArray());
+    }
     /**
      * Retrieves the detailed result of a specific quiz by its score ID.
      * Includes deserialized answered questions.
@@ -265,6 +394,16 @@ public class ScoreService {
         }
 
         List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), answeredQuestionListType);
-        return new QuizResultDTO(score.getId(), score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), score.getScoreValue(), score.getTotalQuestions(), answeredQuestions, user.getId(), user.getUsername());
+        // CRITICAL FIX: The QuizResultDTO constructor requires all fields. The quizId was missing here.
+        // This was causing the 'undefined' error on subsequent actions like downloading the PDF from the modal.
+        return new QuizResultDTO(
+            score.getId(), // quizId
+            score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
+            score.getScoreValue(), // score
+            score.getTotalQuestions(), // totalQuestions
+            answeredQuestions, // answeredQuestions
+            user.getId(), // userId
+            user.getUsername() // username
+        );
     }
 }

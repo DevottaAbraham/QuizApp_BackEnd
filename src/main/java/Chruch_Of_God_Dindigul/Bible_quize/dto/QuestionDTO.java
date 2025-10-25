@@ -23,4 +23,5 @@ public class QuestionDTO {
     private LocalDateTime releaseDate;
     private LocalDateTime disappearDate;
     private String authorUsername;
+    private LocalDateTime lastModifiedDate; // Add this missing field
 }

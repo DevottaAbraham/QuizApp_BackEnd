@@ -57,13 +57,18 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Permit all OPTIONS requests for CORS preflight
                         .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll()
-                        // Admin-only endpoints: Grant full access to all /api/admin/** routes.
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasRole("ADMIN")
-                        // User-accessible endpoints (also accessible by Admin).
-                        // This includes fetching user data, quiz history, notices, etc.
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/user/**"),
-                                       mvcMatcherBuilder.pattern("/api/scores/**"),
-                                       mvcMatcherBuilder.pattern("/api/quizzes/submit")).authenticated()
+                        // Explicitly allow specific admin user endpoints for ADMIN role (more specific than general /admin/**)
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/users/{userId}")).hasRole("ADMIN")
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/users/{userId}/performance")).hasRole("ADMIN")
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/users/{userId}/scores")).hasRole("ADMIN") // Also for scores for a user
+                        // Authenticated endpoints accessible by ANY logged-in user (USER or ADMIN).
+                        .requestMatchers(
+                                mvcMatcherBuilder.pattern("/api/user/**"),
+                                mvcMatcherBuilder.pattern("/api/scores/**"), // User history, leaderboard, etc.
+                                mvcMatcherBuilder.pattern("/api/quizzes/active"),
+                                mvcMatcherBuilder.pattern("/api/quizzes/submit")
+                                ,mvcMatcherBuilder.pattern("/api/auth/me") // Now accessible by any authenticated user
+                        ).authenticated()
                         // Publicly accessible endpoints
                         .requestMatchers(
                                 mvcMatcherBuilder.pattern("/api/auth/login"),
@@ -71,12 +76,13 @@ public class SecurityConfig {
                                 mvcMatcherBuilder.pattern("/api/auth/register-admin"),
                                 mvcMatcherBuilder.pattern("/api/auth/setup-status"),
                                 mvcMatcherBuilder.pattern("/api/auth/refresh"), // Allow access to the refresh endpoint
-                                mvcMatcherBuilder.pattern("/api/auth/forgot-password-generate-temp"),
-                                mvcMatcherBuilder.pattern("/api/auth/me")).permitAll() // Allow access to check session status
+                                mvcMatcherBuilder.pattern("/api/auth/admin-forgot-password")
+                        ).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow public access to uploaded files
                         .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow access to the default error page
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public access to content
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/quizzes/active")).authenticated() // This endpoint must be authenticated
+                        // General Admin-only endpoints: Grant full access to all /api/admin/** routes.
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasRole("ADMIN")
                         // All other requests must be authenticated
                         .anyRequest().authenticated()
                 )

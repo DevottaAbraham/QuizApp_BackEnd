@@ -35,12 +35,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         new AntPathRequestMatcher("/api/auth/register"),
         new AntPathRequestMatcher("/api/auth/register-admin"),
         new AntPathRequestMatcher("/api/auth/setup-status"),
-        new AntPathRequestMatcher("/api/auth/refresh"), // The refresh endpoint itself is public, but requires a valid refresh token cookie.
-        // /api/auth/me should NOT be public in JwtAuthFilter, as it needs to be processed to validate the accessToken.
-        new AntPathRequestMatcher("/api/auth/forgot-password-generate-temp"),
+        new AntPathRequestMatcher("/api/auth/refresh"),
+        new AntPathRequestMatcher("/api/auth/admin-forgot-password"), // Use the correct forgot password endpoint
         new AntPathRequestMatcher("/uploads/**"),
-        new AntPathRequestMatcher("/error"),
-        new AntPathRequestMatcher("/api/content/**") // Add public content endpoints
+        new AntPathRequestMatcher("/error"), // Standard error pages
+        new AntPathRequestMatcher("/api/content/home") // Public content
     );
 
     private final JwtService jwtService;
@@ -54,10 +53,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        // If the request matches any of our defined public endpoints, skip the JWT validation logic.
-        // This is crucial to prevent the filter from processing tokens on public routes,
-        // which can cause authentication errors immediately after login or registration.
-        if (publicEndpoints.matches(request)) {
+        if (publicEndpoints.matches(request) || "/error".equals(request.getRequestURI())) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -75,8 +71,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         if (jwt == null) {
-            filterChain.doFilter(request, response);
-            return;
+            // CRITICAL SECURITY FIX: If the endpoint is protected and no JWT is present,
+            // we must immediately reject the request.
+            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("JWT token is missing.") {});
+            return; // Stop the filter chain.
         }
 
         try {

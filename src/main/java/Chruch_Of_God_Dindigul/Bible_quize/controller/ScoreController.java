@@ -1,6 +1,7 @@
 package Chruch_Of_God_Dindigul.Bible_quize.controller;
 
 import Chruch_Of_God_Dindigul.Bible_quize.dto.LeaderboardDTO;
+import Chruch_Of_God_Dindigul.Bible_quize.dto.MonthlyPerformanceDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.QuizResultDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.model.User;
 import Chruch_Of_God_Dindigul.Bible_quize.service.ScoreService;
@@ -44,6 +45,18 @@ public class ScoreController {
         return ResponseEntity.ok().headers(headers).contentType(MediaType.valueOf("application/vnd.openxmlformats-officedocument.presentationml.presentation")).body(new InputStreamResource(bis));
     }
 
+    @GetMapping("/leaderboard/pdf")
+    public ResponseEntity<InputStreamResource> downloadLeaderboardPdf() {
+        List<LeaderboardDTO> leaderboard = scoreService.getLeaderboard();
+        ByteArrayInputStream bis = scoreService.generateLeaderboardPdf(leaderboard);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Content-Disposition", "inline; filename=leaderboard.pdf");
+
+        return ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_PDF).body(new InputStreamResource(bis));
+    }
+
+
     @GetMapping("/history")
     public ResponseEntity<List<QuizResultDTO>> getScoreHistory(Authentication authentication) {
         User currentUser = (User) authentication.getPrincipal();
@@ -51,6 +64,18 @@ public class ScoreController {
         return ResponseEntity.ok(history);
     }
 
+    /**
+     * Gets the monthly performance data for the currently authenticated user.
+     * This is for the user's own performance chart.
+     * @param authentication The authenticated user.
+     * @return A list of monthly performance data points.
+     */
+    @GetMapping("/my-performance")
+    public ResponseEntity<List<MonthlyPerformanceDTO>> getMyPerformance(Authentication authentication) {
+        User currentUser = (User) authentication.getPrincipal();
+        List<MonthlyPerformanceDTO> performanceData = scoreService.getMonthlyPerformanceForUser(currentUser);
+        return ResponseEntity.ok(performanceData);
+    }
     /**
      * Gets the detailed result of a specific quiz by its score ID.
      * This is used by the frontend to display past quiz results.

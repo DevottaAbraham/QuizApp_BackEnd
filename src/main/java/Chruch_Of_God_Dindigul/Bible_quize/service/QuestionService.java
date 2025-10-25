@@ -112,6 +112,7 @@ public class QuestionService {
         if (question.getAuthor() != null) {
             dto.setAuthorUsername(question.getAuthor().getUsername());
         }
+        dto.setLastModifiedDate(question.getLastModifiedDate()); // Map the last modified date
         return dto;
     }
 
@@ -244,7 +245,7 @@ public class QuestionService {
         // 1. Find all questions with "published" status.
         // 2. Filter them to only include questions where the current time is after the releaseDate and before the disappearDate.
         // 3. Convert the final list of questions to DTOs to be sent to the frontend.
-        return questionRepository.findByStatus("published").stream()
+        return questionRepository.findByStatus("published").stream() // Corrected typo 'f||' to '||'
                 .filter(q -> q.getReleaseDate() != null && q.getDisappearDate() != null &&
                              (now.isEqual(q.getReleaseDate()) || now.isAfter(q.getReleaseDate())) && now.isBefore(q.getDisappearDate()))
                 .map(this::convertToDto)

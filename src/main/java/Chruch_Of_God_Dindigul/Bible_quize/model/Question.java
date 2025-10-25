@@ -1,6 +1,7 @@
 package Chruch_Of_God_Dindigul.Bible_quize.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
@@ -53,6 +54,10 @@ public class Question {
     @ManyToOne
     @JoinColumn(name = "author_id")
     private User author;
+
+    @UpdateTimestamp
+    @Column(name = "last_modified_date")
+    private LocalDateTime lastModifiedDate;
 
     // --- Manually added Getters and Setters to resolve compilation issues ---
 
@@ -158,5 +163,13 @@ public class Question {
 
     public void setAuthor(User author) {
         this.author = author;
+    }
+
+    public LocalDateTime getLastModifiedDate() {
+        return lastModifiedDate;
+    }
+
+    public void setLastModifiedDate(LocalDateTime lastModifiedDate) {
+        this.lastModifiedDate = lastModifiedDate;
     }
 }
