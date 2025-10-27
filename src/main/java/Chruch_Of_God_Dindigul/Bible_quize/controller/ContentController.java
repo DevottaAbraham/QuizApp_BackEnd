@@ -2,6 +2,7 @@ package Chruch_Of_God_Dindigul.Bible_quize.controller;
 
 import Chruch_Of_God_Dindigul.Bible_quize.model.HomePageContent;
 import Chruch_Of_God_Dindigul.Bible_quize.service.HomePageContentService;
+import org.springframework.http.CacheControl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,8 +20,11 @@ public class ContentController {
         this.homePageContentService = homePageContentService;
     }
 
-    @GetMapping("/home")
-    public ResponseEntity<HomePageContent> getHomePageContent() {
-        return ResponseEntity.ok(homePageContentService.getHomePageContent());
-    }
+   @GetMapping("/home")
+public ResponseEntity<HomePageContent> getHomePageContent() {
+    return ResponseEntity.ok()
+            .cacheControl(CacheControl.noCache().mustRevalidate())
+            .body(homePageContentService.getHomePageContent());
+}
+
 }

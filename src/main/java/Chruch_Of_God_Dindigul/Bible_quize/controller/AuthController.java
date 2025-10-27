@@ -32,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import jakarta.servlet.http.HttpServletResponse;
+
+import org.springframework.http.HttpHeaders; // Correct import for Spring's HttpHeaders
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,7 +82,7 @@ public class AuthController {
             // CRITICAL FIX: Add user roles to the JWT claims.
             Map<String, Object> claims = new HashMap<>();
             List<String> authorities = user.getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
+                    .map(authority -> "ROLE_" + authority.getAuthority()) // Ensure ROLE_ prefix
                     .collect(Collectors.toList());
             claims.put("authorities", authorities);
 
@@ -125,18 +127,13 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Username is already taken!"));
         }
 
-        // NEW, MORE ROBUST LOGIC:
-        // If no admins exist in the system, this new user MUST be an admin.
-        // This correctly handles both initial setup and re-setup after all admins are deleted.
-        boolean noAdminsExist = userService.countUsersByRole(Role.ADMIN) == 0;
-        Role userRole = noAdminsExist ? Role.ADMIN : Role.USER;
-
-        logger.info("Registering new user '{}' with role {}", registrationRequest.getUsername(), userRole);
+        // This endpoint should only register users with the USER role. Admin creation is handled by /register-admin.
+        logger.info("Registering new user '{}' with role USER", registrationRequest.getUsername());
 
         User user = User.builder()
                 .username(registrationRequest.getUsername())
                 .password(passwordEncoder.encode(registrationRequest.getPassword()))
-                .role(userRole)
+                .role(Role.USER)
                 .build();
 
         User savedUser = userService.createUser(user);
@@ -145,7 +142,7 @@ public class AuthController {
         logger.info("User '{}' created successfully. Automatically logging in.", savedUser.getUsername());
         Map<String, Object> claims = new HashMap<>();
         List<String> authorities = savedUser.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
+                .map(authority -> "ROLE_" + authority.getAuthority()) // Ensure ROLE_ prefix
                 .collect(Collectors.toList());
         claims.put("authorities", authorities);
 
@@ -195,7 +192,11 @@ public class AuthController {
 
         // Automatically log the new admin in
         Map<String, Object> claims = new HashMap<>();
-        claims.put("authorities", List.of("ROLE_ADMIN"));
+        // CRITICAL FIX: The user's authorities must be fetched from the saved user object
+        // to ensure the JWT is created with the correct roles.
+        List<String> authorities = savedUser.getAuthorities().stream()
+                .map(authority -> "ROLE_" + authority.getAuthority()).collect(Collectors.toList()); // Ensure ROLE_ prefix
+        claims.put("authorities", authorities);
         String accessToken = jwtService.generateAccessToken(claims, savedUser);
         String refreshToken = jwtService.generateRefreshToken(savedUser);
         savedUser.setRefreshToken(refreshToken);
@@ -245,13 +246,14 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "Admin password has been reset.", "newPassword", newPassword));
     }
 
-    @GetMapping("/setup-status")
+     @GetMapping("/setup-status")
     public ResponseEntity<Map<String, Boolean>> getSetupStatus() {
         // Correctly check if an ADMIN user exists to determine if setup is complete.
         boolean isSetupComplete = userService.countUsersByRole(Role.ADMIN) > 0;
         logger.info("Checking admin setup status. Is setup complete? {}", isSetupComplete);
         return ResponseEntity.ok(Map.of("isSetupComplete", isSetupComplete));
     }
+
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
@@ -278,7 +280,9 @@ public class AuthController {
         if (refreshToken != null) {
             try { // Invalidate the refresh token in the database
                 final String finalRefreshToken = refreshToken; // Make refreshToken effectively final
-                String username = jwtService.extractUsername(finalRefreshToken);
+                // CRITICAL FIX: Use a method that can extract the username even if the token is expired.
+                // This ensures the user's refresh token can always be revoked on logout.
+                String username = jwtService.extractUsernameIgnoringExpiration(finalRefreshToken);
                 userService.findByUsername(username).ifPresent(user -> {
                     if (finalRefreshToken.equals(user.getRefreshToken())) {
                         user.setRefreshToken(null);
@@ -310,8 +314,11 @@ public class AuthController {
         }
 
         if (refreshToken == null) {
-            logger.warn("Refresh token not found in cookies during refresh attempt.");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Refresh token not found."));
+            // This is a normal and expected case when a user is not logged in. Log as INFO, not WARN.
+            logger.debug("Refresh token not found in cookies during refresh attempt. This is normal for unauthenticated users.");
+            // Return an empty 401 response. The frontend should interpret this as "user is not logged in"
+            // and not display an error message.
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         String username = null; // Declare username outside the try block for the catch block
@@ -356,12 +363,13 @@ public class AuthController {
      * @param maxAge   The maximum age of the cookie in seconds.
      */
     private void addTokenCookie(HttpServletResponse response, String name, String value, int maxAge) {
-        Cookie cookie = new Cookie(name, value);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(useSecureCookies); // Ensures the cookie is sent only over HTTPS.
-        cookie.setPath("/");    // Makes the cookie available for all paths in the domain.
-        cookie.setMaxAge(maxAge);
-        response.addCookie(cookie);
+        // CRITICAL FIX: Set SameSite=None to allow cross-origin cookie usage.
+        // This is essential for modern browsers when frontend and backend are on different ports/domains.
+        String sameSite = useSecureCookies ? "None" : "Lax"; // Use Lax for HTTP/localhost, None for HTTPS
+        String cookieHeader = String.format("%s=%s; Max-Age=%d; Path=/; HttpOnly; Secure=%b; SameSite=%s",
+                name, value, maxAge, useSecureCookies, sameSite);
+        // Use org.springframework.http.HttpHeaders.SET_COOKIE
+        response.addHeader(HttpHeaders.SET_COOKIE, cookieHeader);
     }
 
     /**

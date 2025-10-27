@@ -45,12 +45,11 @@ public class User implements UserDetails {
      * This is the critical method that provides the user's role to Spring Security.
      * It must return a collection of GrantedAuthority objects.
      */
-public Collection<? extends GrantedAuthority> getAuthorities() {
-
-    // The role must be prefixed with "ROLE_" for Spring Security's hasRole() check to work,
-    // and to match our hasAuthority("ROLE_ADMIN") rule.
-    return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
-}
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        // CRITICAL FIX: This correctly returns the user's role to Spring Security.
+        return List.of(new SimpleGrantedAuthority(role.name()));
+    }
 
     @Override
     public String getPassword() {

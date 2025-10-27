@@ -12,7 +12,8 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addMapping("/api/**") // Apply to all your API endpoints
             .allowedOrigins("http://localhost:5173") // Your frontend's URL
             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-            .allowedHeaders("*")
-            .allowCredentials(true);
+            .allowedHeaders("*") 
+            .allowCredentials(true)
+            .maxAge(3600L); // Optional: How long the pre-flight response can be cached (1 hour)
     }
 }

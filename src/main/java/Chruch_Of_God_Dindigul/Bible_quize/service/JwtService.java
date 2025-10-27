@@ -35,17 +35,21 @@ public class JwtService {
     private long refreshTokenExpiration;
 
     private SecretKey getSignKey() {
-        // Use the raw bytes of the secret key string for HMAC-SHA algorithms.
-        return Keys.hmacShaKeyFor(secretKey.getBytes());
+        // CRITICAL FIX: The secret key is Base64 encoded in application.properties.
+        // It MUST be decoded into raw bytes before being used to create the signing key.
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateAccessToken(Map<String, Object> claims, UserDetails userDetails) {
         return Jwts.builder()
-                .claims().add(claims).and() // Correctly add the extra claims to the builder
+                // CRITICAL FIX: The .claims() call was incorrect.
+                // This now correctly adds the 'authorities' map to the token's payload.
+                .claims(claims) // Set the claims payload
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
-                .signWith(getSignKey())
+                .signWith(getSignKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -55,7 +59,7 @@ public class JwtService {
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
-                .signWith(getSignKey())
+                .signWith(getSignKey(), Jwts.SIG.HS256)
                 .compact();
     }
 

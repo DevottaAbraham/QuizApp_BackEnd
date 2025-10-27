@@ -19,20 +19,20 @@ public class HomePageContentService {
     public HomePageContent getHomePageContent() {
         List<HomePageContent> contentList = repository.findAll();
         if (contentList.isEmpty()) {
-            HomePageContent defaultContent = new HomePageContent();
-            defaultContent.setContent("Welcome to the Bible Quiz!");
-            return defaultContent;
+            // If no content exists, create and save a default one.
+            return updateHomePageContent("Welcome to the Bible Quiz!");
         }
         return contentList.get(0);
     }
 
     public HomePageContent updateHomePageContent(String newContent) {
-        List<HomePageContent> contentList = repository.findAll();
+        // Find the first content record, or create a new one if none exist.
         HomePageContent contentToUpdate;
-        if (contentList.isEmpty()) {
-            contentToUpdate = new HomePageContent();
+        java.util.Optional<HomePageContent> existingContent = repository.findAll().stream().findFirst();
+        if (existingContent.isPresent()) {
+            contentToUpdate = existingContent.get();
         } else {
-            contentToUpdate = contentList.get(0);
+            contentToUpdate = new HomePageContent();
         }
         contentToUpdate.setContent(newContent);
         return repository.save(contentToUpdate);

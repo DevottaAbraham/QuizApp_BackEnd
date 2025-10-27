@@ -11,13 +11,14 @@ import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.google.gson.Gson;
-import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import Chruch_Of_God_Dindigul.Bible_quize.dto.QuestionDTO;
 import com.itextpdf.io.font.FontProgramFactory;
 import org.apache.poi.xslf.usermodel.XSLFTable;
 import org.apache.poi.xslf.usermodel.XSLFTableCell;
@@ -25,6 +26,8 @@ import org.apache.poi.xslf.usermodel.XSLFTableRow;
 import org.apache.poi.xslf.usermodel.XSLFTextParagraph;
 import org.apache.poi.xslf.usermodel.XSLFTextRun;
 import com.itextpdf.io.font.constants.StandardFonts;
+
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import com.itextpdf.io.font.FontProgram;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
@@ -40,9 +43,11 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import com.google.gson.reflect.TypeToken;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -72,22 +77,25 @@ public class ScoreService {
 
     public ByteArrayInputStream generateLeaderboardPpt(List<LeaderboardDTO> leaderboard) {
         try (XMLSlideShow ppt = new XMLSlideShow(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            // Set slide size to widescreen 16:9 (1280x720)
+            java.awt.Dimension slideSize = new java.awt.Dimension(1280, 720);
+            ppt.setPageSize(slideSize);
             XSLFSlide slide = ppt.createSlide(); // Create a slide
 
             // Add a title
             XSLFTextShape title = slide.createTextBox();
-            title.setAnchor(new Rectangle(50, 20, 620, 50));
+            title.setAnchor(new Rectangle(100, 50, 1080, 80));
             XSLFTextParagraph p1 = title.addNewTextParagraph();
             XSLFTextRun r1 = p1.addNewTextRun();
             r1.setText("Top 5 Winners");
             r1.setFontFamily("Arial");
-            r1.setFontSize(32.0);
+            r1.setFontSize(44.0); // Increased font size
             r1.setFontColor(new Color(0, 82, 129)); // A nice blue color
             p1.setTextAlign(org.apache.poi.sl.usermodel.TextParagraph.TextAlign.CENTER);
             
             // Create a table
             XSLFTable table = slide.createTable(leaderboard.size() + 1, 3); // +1 for header row
-            table.setAnchor(new Rectangle(50, 80, 620, 300));
+            table.setAnchor(new Rectangle(140, 150, 1000, 400));
 
             // --- Create Header Row ---
             XSLFTableRow headerRow = table.getRows().get(0);
@@ -108,6 +116,7 @@ public class ScoreService {
                 r.setText(headers[i]);
                 r.setBold(true);
                 r.setFontFamily("Arial");
+                r.setFontSize(20.0); // Set header font size
                 r.setFontColor(Color.white);
                 th.setFillColor(new Color(0, 82, 129));
             }
@@ -130,7 +139,7 @@ public class ScoreService {
                     p.setTextAlign(cellAligns[i]);
                     XSLFTextRun r = p.addNewTextRun();
                     r.setFontFamily("Arial");
-                    r.setFontSize(14.0);
+                    r.setFontSize(18.0); // Increased font size
                     r.setText(values[i]);
                 }
                 rank++;
@@ -138,8 +147,8 @@ public class ScoreService {
 
             // Set column widths
             table.setColumnWidth(0, 100);
-            table.setColumnWidth(1, 320);
-            table.setColumnWidth(2, 200);
+            table.setColumnWidth(1, 600);
+            table.setColumnWidth(2, 300);
 
             ppt.write(out);
             return new ByteArrayInputStream(out.toByteArray());
@@ -259,29 +268,39 @@ public class ScoreService {
             PdfDocument pdf = new PdfDocument(writer);
             Document document = new Document(pdf);
 
+            // Enable the CalligraphHandler for complex script processing.
+            // CalligraphHandler.enable(pdf); // Removed as requested.
+
             boolean isTamil = "ta".equalsIgnoreCase(language);
             // Explicitly declare the type to resolve compilation error
-            com.itextpdf.kernel.font.PdfFont font; 
+            PdfFont font;
             if (isTamil) {
-                // Definitive fix: Load the font from the classpath to ensure it's found in a packaged JAR.
+                // CRITICAL FIX: Load the font from the classpath. This is the correct way to bundle
+                // resources and ensures the font can be found when the app is packaged as a JAR.
                 try (InputStream fontStream = getClass().getClassLoader().getResourceAsStream("fonts/NotoSansTamil-Regular.ttf")) {
                     if (fontStream == null) {
                         throw new IOException("Tamil font 'NotoSansTamil-Regular.ttf' not found in classpath under 'fonts/' directory.");
                     }
-                    // Simplified and more robust font loading
                     byte[] fontBytes = fontStream.readAllBytes();
                     FontProgram fontProgram = FontProgramFactory.createFont(fontBytes);
-                    font = PdfFontFactory.createFont(fontProgram, com.itextpdf.io.font.PdfEncodings.IDENTITY_H, true); // Use boolean for embedding
-                } 
+                    // FINAL FIX: Use the correct createFont method signature with an EmbeddingStrategy.
+                    // The font-asian dependency will automatically handle complex script rendering (like Tamil)
+                    // when the font is properly embedded with IDENTITY_H encoding.
+                    font = PdfFontFactory.createFont(fontProgram, com.itextpdf.io.font.PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+                }
             } else {
                 font = PdfFontFactory.createFont(StandardFonts.HELVETICA);
             }
 
-            String titleText = isTamil ? "தேர்வு முடிவுகள்" : "Quiz Results";
+            // Set the default font for the entire document. This is cleaner.
+            document.setFont(font);
+
+            String titleText = "Quiz Results";
             document.add(new Paragraph(titleText).setFont(font).setBold().setFontSize(22).setTextAlignment(TextAlignment.CENTER));
             
             // Add User Details and Score
-            document.add(new Paragraph((isTamil ? "பயனர்: " : "User: ") + result.username() + " (ID: " + result.userId() + ")").setFont(font).setFontSize(12));
+            // Use Tamil labels for user details when the language is Tamil.
+            document.add(new Paragraph("User: " + result.username() + " (ID: " + result.userId() + ")").setFont(font).setFontSize(12));
             document.add(new Paragraph((isTamil ? "தேதி: " : "Date: ") + result.quizDate()).setFont(font).setFontSize(12));
             document.add(new Paragraph((isTamil ? "மதிப்பெண்: " : "Score: ") + result.score() + "/" + result.totalQuestions()).setFont(font).setFontSize(12).setBold());
             document.add(new Paragraph("\n"));
@@ -290,21 +309,28 @@ public class ScoreService {
             for (AnsweredQuestionDTO answeredQuestion : result.answeredQuestions()) {
                 String questionText = isTamil ? answeredQuestion.questionText_ta() : answeredQuestion.questionText_en();
                 document.add(new Paragraph(questionNumber++ + ". " + questionText).setFont(font).setBold().setFontSize(14));
-
+                
+                // FIX: Use Text objects to prevent character shuffling in complex scripts like Tamil.
+                // This ensures the iText layout engine correctly processes each part of the string.
+                // FINAL FIX: Explicitly set the font on each Text object to guarantee correct rendering.
                 if (answeredQuestion.isCorrect()) {
                     String correctText = isTamil ? "உங்கள் பதில் சரி: " : "Your correct answer: ";
                     String userAnswerText = isTamil ? answeredQuestion.userAnswer_ta() : answeredQuestion.userAnswer();
-                    document.add(new Paragraph(correctText + userAnswerText).setFont(font)
-                        .setFontColor(ColorConstants.GREEN).setFontSize(12)); // Removed duplicate setFontSize
+                    Paragraph p = new Paragraph().add(new com.itextpdf.layout.element.Text(correctText).setFont(font))
+                                                 .add(new com.itextpdf.layout.element.Text(userAnswerText).setFont(font));
+                    document.add(p.setFontColor(ColorConstants.GREEN).setFontSize(12));
                 } else {
                     String wrongText = isTamil ? "உங்கள் தவறான பதில்: " : "Your incorrect answer: ";
                     String userAnswerText = isTamil ? answeredQuestion.userAnswer_ta() : answeredQuestion.userAnswer();
-                    document.add(new Paragraph(wrongText + userAnswerText).setFont(font).setFontColor(ColorConstants.RED).setFontSize(12));
+                    Paragraph p1 = new Paragraph().add(new com.itextpdf.layout.element.Text(wrongText).setFont(font))
+                                                  .add(new com.itextpdf.layout.element.Text(userAnswerText).setFont(font));
+                    document.add(p1.setFontColor(ColorConstants.RED).setFontSize(12));
 
                     String correctText = isTamil ? "சரியான பதில்: " : "Correct answer: ";
                     String correctAnswerText = isTamil ? answeredQuestion.correctAnswer_ta() : answeredQuestion.correctAnswer();
-                    document.add(new Paragraph(correctText + correctAnswerText)
-                        .setFont(font).setFontColor(ColorConstants.DARK_GRAY).setFontSize(12));
+                    Paragraph p2 = new Paragraph().add(new com.itextpdf.layout.element.Text(correctText).setFont(font))
+                                                  .add(new com.itextpdf.layout.element.Text(correctAnswerText).setFont(font));
+                    document.add(p2.setFontColor(ColorConstants.DARK_GRAY).setFontSize(12));
                 }
                 document.add(new Paragraph("\n"));
             }
@@ -342,41 +368,48 @@ public class ScoreService {
         return generateQuizResultPdf(resultDTO, lang);
     }
 
-    public ByteArrayInputStream generateLeaderboardPdf(List<LeaderboardDTO> leaderboard) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try {
-            PdfWriter writer = new PdfWriter(out);
-            PdfDocument pdf = new PdfDocument(writer);
-            Document document = new Document(pdf);
+    /**
+	 * Generates a plain text file for a specific quiz result in Tamil.
+	 * @param scoreId The ID of the score record.
+	 * @param user The authenticated user.
+	 * @return A ByteArrayInputStream containing the UTF-8 encoded text file.
+	 */
+    public ByteArrayInputStream generateQuizResultTxtById(Long scoreId, User user) {
+        Score score = scoreRepository.findById(scoreId)
+            .orElseThrow(() -> new RuntimeException("Score not found"));
 
-            var font = PdfFontFactory.createFont(StandardFonts.HELVETICA);
-
-            document.add(new Paragraph("Leaderboard")
-                    .setFont(font).setBold().setFontSize(20).setTextAlignment(TextAlignment.CENTER));
-            document.add(new Paragraph("\n"));
-
-           Table table = new Table(UnitValue.createPercentArray(new float[]{1, 3, 2}));
-           table.setWidth(UnitValue.createPercentValue(100));
-
-
-            table.addHeaderCell(new Paragraph("Rank").setFont(font).setBold());
-            table.addHeaderCell(new Paragraph("Username").setFont(font).setBold());
-            table.addHeaderCell(new Paragraph("Score").setFont(font).setBold().setTextAlignment(TextAlignment.RIGHT));
-
-            int rank = 1;
-            for (LeaderboardDTO entry : leaderboard) {
-                table.addCell(new Paragraph(String.valueOf(rank++)).setFont(font));
-                table.addCell(new Paragraph(entry.getUsername()).setFont(font));
-                table.addCell(new Paragraph(String.valueOf(entry.getTotalScore())).setFont(font).setTextAlignment(TextAlignment.RIGHT));
-            }
-
-            document.add(table);
-            document.close();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to generate Leaderboard PDF", e);
+        // Security check: ensure the user is requesting their own score
+        if (!score.getUser().getId().equals(user.getId())) {
+            throw new org.springframework.security.access.AccessDeniedException("You are not authorized to view this score.");
         }
-        return new ByteArrayInputStream(out.toByteArray());
+
+        // Deserialize the stored JSON back into a list of answered questions
+        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), this.answeredQuestionListType);
+
+        StringBuilder sb = new StringBuilder();
+		sb.append("தேதி: ").append(score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))).append("\n");
+		sb.append("மதிப்பெண்: ").append(score.getScoreValue()).append("/").append(score.getTotalQuestions()).append("\n\n");
+
+		int questionNumber = 1;
+		for (AnsweredQuestionDTO answeredQuestion : answeredQuestions) {
+			sb.append(questionNumber++).append(". ").append(answeredQuestion.questionText_ta()).append("\n");
+
+			if (answeredQuestion.isCorrect()) {
+				sb.append("   உங்கள் பதில் சரி: ").append(answeredQuestion.userAnswer_ta()).append("\n");
+			} else {
+				sb.append("   உங்கள் தவறான பதில்: ").append(answeredQuestion.userAnswer_ta()).append("\n");
+				sb.append("   சரியான பதில்: ").append(answeredQuestion.correctAnswer_ta()).append("\n");
+			}
+			sb.append("\n");
+		}
+
+		// Convert the final string to a byte array using UTF-8 encoding to support Tamil characters.
+		byte[] bytes = sb.toString().getBytes(StandardCharsets.UTF_8);
+		return new ByteArrayInputStream(bytes);
     }
+
+
+
     /**
      * Retrieves the detailed result of a specific quiz by its score ID.
      * Includes deserialized answered questions.
@@ -406,4 +439,110 @@ public class ScoreService {
             user.getUsername() // username
         );
     }
+
+	public ByteArrayInputStream generateQuestionsPdf(List<QuestionDTO> questions) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		try {
+			PdfWriter writer = new PdfWriter(out);
+			PdfDocument pdf = new PdfDocument(writer);
+			Document document = new Document(pdf);
+
+			// Enable the CalligraphHandler for complex script processing.
+			// CalligraphHandler.enable(pdf); // Removed as requested.
+			// Load Tamil font
+			PdfFont tamilFont;
+			try (InputStream fontStream = getClass().getClassLoader().getResourceAsStream("fonts/NotoSansTamil-Regular.ttf")) {
+				if (fontStream == null) {
+					throw new IOException("Tamil font 'NotoSansTamil-Regular.ttf' not found in classpath under 'fonts/' directory.");
+				}
+				byte[] fontBytes = fontStream.readAllBytes();
+				FontProgram fontProgram = FontProgramFactory.createFont(fontBytes);
+				tamilFont = PdfFontFactory.createFont(fontProgram, com.itextpdf.io.font.PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
+			}
+
+			// Load English font
+			PdfFont englishFont = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+
+			document.add(new Paragraph("All Questions and Answers")
+					.setFont(englishFont).setBold().setFontSize(22).setTextAlignment(TextAlignment.CENTER));
+			document.add(new Paragraph("\n"));
+
+			int questionNumber = 1;
+			for (QuestionDTO question : questions) {
+				// Question Text (English)
+				document.add(new Paragraph(questionNumber + ". " + question.getText_en())
+						.setFont(englishFont).setBold().setFontSize(14));
+				// Question Text (Tamil)
+				document.add(new Paragraph(questionNumber + ". " + question.getText_ta())
+						.setFont(tamilFont).setBold().setFontSize(14));
+
+				// Options (English)
+				if (question.getOptions_en() != null && !question.getOptions_en().isEmpty()) {
+					document.add(new Paragraph("Options (English):").setFont(englishFont).setFontSize(12));
+					char optionChar = 'A';
+					for (String option : question.getOptions_en()) {
+						document.add(new Paragraph("  " + (optionChar++) + ". " + option)
+								.setFont(englishFont).setFontSize(12));
+					}
+				}
+
+				// Options (Tamil)
+				if (question.getOptions_ta() != null && !question.getOptions_ta().isEmpty()) {
+					document.add(new Paragraph("விருப்பங்கள் (தமிழ்):").setFont(tamilFont).setFontSize(12));
+					char optionChar = 'அ'; // Tamil equivalent for options
+					for (String option : question.getOptions_ta()) {
+						document.add(new Paragraph("  " + (optionChar++) + ". " + option)
+								.setFont(tamilFont).setFontSize(12));
+					}
+				}
+
+				// Correct Answer (English)
+				document.add(new Paragraph("Correct Answer (English): " + question.getCorrectAnswer_en())
+						.setFont(englishFont).setFontSize(12).setFontColor(ColorConstants.BLUE));
+
+				// Correct Answer (Tamil)
+				document.add(new Paragraph("சரியான பதில் (தமிழ்): " + question.getCorrectAnswer_ta())
+						.setFont(tamilFont).setFontSize(12).setFontColor(ColorConstants.BLUE));
+
+				document.add(new Paragraph("\n")); // Add a line break between questions
+				questionNumber++;
+			}
+
+			document.close();
+		} catch (IOException e) {
+			throw new RuntimeException("Failed to generate Questions PDF", e);
+		}
+		return new ByteArrayInputStream(out.toByteArray());
+	}
+
+	/**
+	 * Generates a plain text file containing all questions and answers in Tamil.
+	 * @param questions The list of questions to include in the file.
+	 * @return A ByteArrayInputStream containing the UTF-8 encoded text file.
+	 */
+	public ByteArrayInputStream generateQuestionsTxt(List<QuestionDTO> questions) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("அனைத்து கேள்விகள் மற்றும் பதில்கள்\n");
+		sb.append("==================================\n\n");
+
+		int questionNumber = 1;
+		for (QuestionDTO question : questions) {
+			sb.append(questionNumber).append(". ").append(question.getText_ta()).append("\n");
+
+			if (question.getOptions_ta() != null && !question.getOptions_ta().isEmpty()) {
+				sb.append("   விருப்பங்கள்:\n");
+				char optionChar = 'அ';
+				for (String option : question.getOptions_ta()) {
+					sb.append("      ").append(optionChar++).append(") ").append(option).append("\n");
+				}
+			}
+
+			sb.append("   சரியான பதில்: ").append(question.getCorrectAnswer_ta()).append("\n\n");
+			questionNumber++;
+		}
+
+		// Convert the final string to a byte array using UTF-8 encoding to support Tamil characters.
+		byte[] bytes = sb.toString().getBytes(StandardCharsets.UTF_8);
+		return new ByteArrayInputStream(bytes);
+	}
 }

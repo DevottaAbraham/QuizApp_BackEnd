@@ -240,6 +240,13 @@ public class QuestionService {
         }
     }
 
+    /**
+     * Deletes all questions from the database.
+     */
+    public void deleteAllQuestions() {
+        questionRepository.deleteAll();
+    }
+
     public List<QuestionDTO> getPublishedQuestionsForQuiz() {
         LocalDateTime now = LocalDateTime.now();
         // 1. Find all questions with "published" status.

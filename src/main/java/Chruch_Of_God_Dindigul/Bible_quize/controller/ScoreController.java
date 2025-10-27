@@ -51,7 +51,7 @@ public class ScoreController {
         ByteArrayInputStream bis = scoreService.generateLeaderboardPdf(leaderboard);
 
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Content-Disposition", "inline; filename=leaderboard.pdf");
+        headers.add("Content-Disposition", "attachment; filename=leaderboard.pdf");
 
         return ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_PDF).body(new InputStreamResource(bis));
     }
@@ -92,21 +92,30 @@ public class ScoreController {
 
 
     /**
-     * Downloads a detailed, color-coded PDF report of a specific quiz result.
+     * Downloads a report of a specific quiz result.
+     * If lang=en, it returns a PDF.
+     * If lang=ta, it returns a plain text file.
      * @param scoreId The ID of the score record.
-     * @param lang The language for the PDF ('en' or 'ta').
+     * @param lang The language for the report ('en' or 'ta').
      */
     @GetMapping("/history/{scoreId}/download")
-    public ResponseEntity<InputStreamResource> downloadQuizResultPdf(
+    public ResponseEntity<InputStreamResource> downloadQuizResult(
             @PathVariable("scoreId") Long scoreId,
             @RequestParam(defaultValue = "en") String lang,
             Authentication authentication) {
         User currentUser = (User) authentication.getPrincipal();
-        ByteArrayInputStream bis = scoreService.generateQuizResultPdfById(scoreId, currentUser, lang);
-
         HttpHeaders headers = new HttpHeaders();
-        headers.add("Content-Disposition", "inline; filename=quiz-result-" + scoreId + ".pdf");
 
-        return ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_PDF).body(new InputStreamResource(bis));
+        if ("ta".equalsIgnoreCase(lang)) {
+            ByteArrayInputStream bis = scoreService.generateQuizResultTxtById(scoreId, currentUser);
+            headers.add("Content-Disposition", "attachment; filename=quiz-result-" + scoreId + ".txt");
+            return ResponseEntity.ok().headers(headers).contentType(MediaType.parseMediaType("text/plain; charset=utf-8")).body(new InputStreamResource(bis));
+        } else {
+            // Default to English PDF
+            ByteArrayInputStream bis = scoreService.generateQuizResultPdfById(scoreId, currentUser, "en");
+            headers.add("Content-Disposition", "attachment; filename=quiz-result-" + scoreId + ".pdf");
+            return ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_PDF).body(new InputStreamResource(bis));
+        }
     }
+
 }

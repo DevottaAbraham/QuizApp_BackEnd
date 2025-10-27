@@ -1,6 +1,6 @@
 package Chruch_Of_God_Dindigul.Bible_quize.controller;
 
-import Chruch_Of_God_Dindigul.Bible_quize.dto.UserDTO; // Keep one
+import Chruch_Of_God_Dindigul.Bible_quize.dto.UserDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.LeaderboardDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.QuestionDTO;
 import Chruch_Of_God_Dindigul.Bible_quize.dto.RegistrationRequest;
@@ -18,6 +18,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import Chruch_Of_God_Dindigul.Bible_quize.service.ScoreService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.slf4j.Logger;
@@ -25,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.io.ByteArrayInputStream;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -188,6 +192,7 @@ class Admincontroller {
      */
     @PostMapping("/admins")
     public ResponseEntity<?> createAdmin(@RequestBody RegistrationRequest registrationRequest) {
+        // If the username already exists, inform the admin instead of creating a duplicate.
         if (userService.findByUsername(registrationRequest.getUsername()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Username is already taken!"));
         }
@@ -384,6 +389,49 @@ class Admincontroller {
         String disappearDate = payload.get("disappearDate");
         QuestionDTO publishedQuestion = questionService.publishQuestion(id, releaseDate, disappearDate);
         return ResponseEntity.ok(publishedQuestion);
+    }
+
+    /**
+     * Downloads a PDF report of all questions in the system.
+     * @return A PDF file.
+     */
+    @GetMapping("/questions/download/pdf")
+    public ResponseEntity<InputStreamResource> downloadQuestionsPdf() {
+        List<QuestionDTO> questions = questionService.getAllQuestions();
+        // Reusing the ScoreService for PDF generation logic
+        ByteArrayInputStream bis = scoreService.generateQuestionsPdf(questions);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Content-Disposition", "inline; filename=questions-history.pdf");
+
+        return ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_PDF).body(new InputStreamResource(bis));
+    }
+
+    /**
+     * Downloads a plain text (.txt) report of all questions in Tamil.
+     * @return A text file.
+     */
+    @GetMapping("/questions/download/txt")
+    public ResponseEntity<InputStreamResource> downloadQuestionsTxt() {
+        List<QuestionDTO> questions = questionService.getAllQuestions();
+        ByteArrayInputStream bis = scoreService.generateQuestionsTxt(questions);
+
+        HttpHeaders headers = new HttpHeaders();
+        // Set the filename for the download
+        headers.add("Content-Disposition", "attachment; filename=questions-tamil.txt");
+
+        // Set content type to text/plain and specify UTF-8 encoding
+        return ResponseEntity.ok().headers(headers).contentType(MediaType.parseMediaType("text/plain; charset=utf-8")).body(new InputStreamResource(bis));
+    }
+
+    /**
+     * Deletes all questions from the system. This is an irreversible action.
+     * @return A success message.
+     */
+    @DeleteMapping("/questions/all")
+    public ResponseEntity<?> deleteAllQuestions() {
+        questionService.deleteAllQuestions();
+        return ResponseEntity.ok(Map.of("message", "All questions have been successfully deleted."));
     }
 
     @PostMapping("/questions/bulk/publish")

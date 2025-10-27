@@ -30,16 +30,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    private final RequestMatcher publicEndpoints = new OrRequestMatcher(
-        new AntPathRequestMatcher("/api/auth/login"),
-        new AntPathRequestMatcher("/api/auth/register"),
-        new AntPathRequestMatcher("/api/auth/register-admin"),
-        new AntPathRequestMatcher("/api/auth/setup-status"),
-        new AntPathRequestMatcher("/api/auth/refresh"),
-        new AntPathRequestMatcher("/api/auth/admin-forgot-password"), // Use the correct forgot password endpoint
-        new AntPathRequestMatcher("/uploads/**"),
-        new AntPathRequestMatcher("/error"), // Standard error pages
-        new AntPathRequestMatcher("/api/content/home") // Public content
+    // CRITICAL FIX: Use a List of matchers for more reliable public endpoint checking.
+    private final List<RequestMatcher> publicEndpoints = Arrays.asList(
+            new AntPathRequestMatcher("/api/auth/login"),
+            new AntPathRequestMatcher("/api/auth/register"),
+            new AntPathRequestMatcher("/api/auth/register-admin"),
+            new AntPathRequestMatcher("/api/auth/setup-status"),
+            new AntPathRequestMatcher("/api/auth/refresh"),
+            new AntPathRequestMatcher("/api/auth/admin-forgot-password"),
+            new AntPathRequestMatcher("/api/auth/logout"),
+            new AntPathRequestMatcher("/uploads/**"),
+            new AntPathRequestMatcher("/error"),
+            new AntPathRequestMatcher("/api/content/home")
     );
 
     private final JwtService jwtService;
@@ -53,7 +55,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        if (publicEndpoints.matches(request) || "/error".equals(request.getRequestURI())) {
+        // More robust check for public endpoints
+        boolean isPublicEndpoint = publicEndpoints.stream().anyMatch(matcher -> matcher.matches(request));
+
+        if (isPublicEndpoint) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -73,7 +78,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (jwt == null) {
             // CRITICAL SECURITY FIX: If the endpoint is protected and no JWT is present,
             // we must immediately reject the request.
-            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("JWT token is missing.") {});
+            // This is an expected case for unauthenticated users, so we don't need to log it as a warning.
+            // The CustomAuthenticationEntryPoint will log it at a WARN level, which is sufficient.
+            // We simply need to trigger it and stop the chain.
+            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("JWT token is missing.") { });
             return; // Stop the filter chain.
         }
 
@@ -83,15 +91,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
                 if (jwtService.isTokenValid(jwt, userDetails)) {
-                    // CRITICAL FIX: Extract authorities directly from the token's claims
-                    // This ensures the user's roles are correctly loaded for every request.
+                    // CRITICAL SECURITY FIX: Extract authorities from the token's claims.
+                    // This ensures the user's roles (e.g., ROLE_ADMIN) are correctly loaded for every request.
                     Claims claims = jwtService.extractAllClaims(jwt);
+                    // Ensure the list is not null before processing
                     List<String> authoritiesList = claims.get("authorities", List.class);
 
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,
                             null, // Credentials are not needed as we are using a token
-                            jwtService.getAuthoritiesFromClaims(authoritiesList)
+                            // CRITICAL FIX: Convert the list of strings from claims into GrantedAuthority objects.
+                            // This was the missing step that caused all admin access to be denied.
+                            authoritiesList == null ? List.of() : authoritiesList.stream()
+                                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                                    .collect(Collectors.toList())
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
