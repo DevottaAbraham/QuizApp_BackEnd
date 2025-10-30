@@ -2,39 +2,40 @@ package Chruch_Of_God_Dindigul.Bible_quize.service;
 
 import Chruch_Of_God_Dindigul.Bible_quize.model.HomePageContent;
 import Chruch_Of_God_Dindigul.Bible_quize.repository.HomePageContentRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.util.List;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class HomePageContentService {
 
-    private final HomePageContentRepository repository;
+    private final HomePageContentRepository homePageContentRepository;
 
     @Autowired
-    public HomePageContentService(HomePageContentRepository repository) {
-        this.repository = repository;
+    public HomePageContentService(HomePageContentRepository homePageContentRepository) {
+        this.homePageContentRepository = homePageContentRepository;
     }
 
-    public HomePageContent getHomePageContent() {
-        List<HomePageContent> contentList = repository.findAll();
-        if (contentList.isEmpty()) {
-            // If no content exists, create and save a default one.
-            return updateHomePageContent("Welcome to the Bible Quiz!");
-        }
-        return contentList.get(0);
-    }
-
+    @Transactional
+    @CacheEvict(value = "homeContent", allEntries = true) // Invalidate the cache on update
     public HomePageContent updateHomePageContent(String newContent) {
-        // Find the first content record, or create a new one if none exist.
-        HomePageContent contentToUpdate;
-        java.util.Optional<HomePageContent> existingContent = repository.findAll().stream().findFirst();
-        if (existingContent.isPresent()) {
-            contentToUpdate = existingContent.get();
-        } else {
-            contentToUpdate = new HomePageContent();
-        }
-        contentToUpdate.setContent(newContent);
-        return repository.save(contentToUpdate);
+        // Retrieve the single HomePageContent entry.
+        // If it doesn't exist, create a new one.
+        HomePageContent homePageContent = homePageContentRepository.findTopByOrderByIdAsc()
+                                            .orElseGet(HomePageContent::new);
+
+        homePageContent.setContent(newContent);
+        return homePageContentRepository.save(homePageContent);
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable("homeContent") // Cache the result of this method
+    public HomePageContent getHomePageContent() {
+        // Retrieve the single HomePageContent entry.
+        // If it doesn't exist, return a default empty one.
+        return homePageContentRepository.findTopByOrderByIdAsc()
+                                            .orElseGet(() -> new HomePageContent(null, "Welcome to the Quiz App!"));
     }
 }

@@ -174,7 +174,7 @@ public class AuthController {
     @PostMapping("/register-admin")
     public ResponseEntity<?> registerAdmin(@RequestBody RegistrationRequest registrationRequest, HttpServletResponse response) {
         // SECURITY: This endpoint should only function if no admins exist.
-        if (userService.countUsersByRole(Role.ADMIN) > 0) {
+        if (userService.countUsersByRole(Role.ADMIN) > 0) { // <--- This is the check
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Setup is already complete. Cannot create new admin."));
         }
 
@@ -192,21 +192,19 @@ public class AuthController {
 
         // Automatically log the new admin in
         Map<String, Object> claims = new HashMap<>();
-        // CRITICAL FIX: The user's authorities must be fetched from the saved user object
-        // to ensure the JWT is created with the correct roles.
         List<String> authorities = savedUser.getAuthorities().stream()
-                .map(authority -> "ROLE_" + authority.getAuthority()).collect(Collectors.toList()); // Ensure ROLE_ prefix
+                .map(authority -> "ROLE_" + authority.getAuthority()).collect(Collectors.toList());
         claims.put("authorities", authorities);
         String accessToken = jwtService.generateAccessToken(claims, savedUser);
         String refreshToken = jwtService.generateRefreshToken(savedUser);
         savedUser.setRefreshToken(refreshToken);
         userService.updateUser(savedUser);
-
         addTokenCookie(response, "accessToken", accessToken, (int) (jwtService.getAccessTokenExpiration() / 1000));
         addTokenCookie(response, "refreshToken", refreshToken, (int) (jwtService.getRefreshTokenExpiration() / 1000));
 
         LoginResponse loginResponse = new LoginResponse(savedUser.getId(), savedUser.getUsername(), savedUser.getRole(), savedUser.isMustChangePassword());
         return ResponseEntity.status(HttpStatus.CREATED).body(loginResponse);
+        // ... rest of the code to create the first admin
     }
 
     /**

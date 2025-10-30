@@ -48,7 +48,7 @@ public class ScoreController {
     @GetMapping("/leaderboard/pdf")
     public ResponseEntity<InputStreamResource> downloadLeaderboardPdf() {
         List<LeaderboardDTO> leaderboard = scoreService.getLeaderboard();
-        ByteArrayInputStream bis = scoreService.generateLeaderboardPdf(leaderboard);
+        ByteArrayInputStream bis = scoreService.generateLeaderboardPpt(leaderboard); // Assuming default language is English
 
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Disposition", "attachment; filename=leaderboard.pdf");

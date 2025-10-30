@@ -190,6 +190,7 @@ class Admincontroller {
      * Creates a new user with the ADMIN role.
      * This provides a dedicated and secure endpoint for adding new administrators.
      */
+   // d:\Quize Website Design\Quiz_App_BackEnd\Bible_quize\src\main\java\Chruch_Of_God_Dindigul\Bible_quize\controller\Admincontroller.java
     @PostMapping("/admins")
     public ResponseEntity<?> createAdmin(@RequestBody RegistrationRequest registrationRequest) {
         // If the username already exists, inform the admin instead of creating a duplicate.
@@ -199,12 +200,13 @@ class Admincontroller {
         User user = User.builder()
                 .username(registrationRequest.getUsername())
                 .password(passwordEncoder.encode(registrationRequest.getPassword()))
-                .role(Role.ADMIN)
+                .role(Role.ADMIN) // Explicitly set role to ADMIN
                 .build();
 
         User savedUser = userService.createUser(user);
         return new ResponseEntity<>(new UserDTO(savedUser.getId(), savedUser.getUsername(), savedUser.getRole(), savedUser.isMustChangePassword()), HttpStatus.CREATED);
     }
+
     @PostMapping("/users")
     public ResponseEntity<?> createUser(@RequestBody RegistrationRequest registrationRequest, Authentication authentication) {
         if (userService.findByUsername(registrationRequest.getUsername()).isPresent()) {
@@ -239,6 +241,12 @@ class Admincontroller {
             return ResponseEntity.noContent().build(); // User already gone, idempotent success
         }
 
+        // Best Practice: Invalidate the user's refresh token before deleting them.
+        // This helps prevent errors if the deleted user's browser tries to refresh their session.
+        User user = userToDelete.get();
+        user.setRefreshToken(null);
+        userService.updateUser(user);
+
         // Proceed with deletion if the user exists and is not the current admin.
         userService.deleteUserById(id);
         return ResponseEntity.noContent().build();
@@ -256,6 +264,11 @@ class Admincontroller {
         if (userToDelete.get().getRole() == Role.ADMIN) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Admin accounts cannot be deleted."));
         }
+
+        // Best Practice: Invalidate the user's refresh token before deleting them.
+        User user = userToDelete.get();
+        user.setRefreshToken(null);
+        userService.updateUser(user);
 
         userService.deleteUserById(id);
         return ResponseEntity.noContent().build();
