@@ -28,7 +28,7 @@ public class Score {
 
     // This field corresponds to the 'total' column in the database.
     @Column(name = "total", nullable = false)
-    private Integer totalQuestions;
+    private Integer total;
 
     // Getters and Setters
 
@@ -72,11 +72,11 @@ public class Score {
         this.answeredQuestionsJson = answeredQuestionsJson;
     }
 
-    public Integer getTotalQuestions() {
-        return totalQuestions;
+    public Integer getTotal() {
+        return total;
     }
 
-    public void setTotalQuestions(Integer totalQuestions) {
-        this.totalQuestions = totalQuestions;
+    public void setTotal(Integer total) {
+        this.total = total;
     }
 }

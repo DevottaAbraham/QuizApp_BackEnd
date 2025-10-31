@@ -1,29 +1,9 @@
-# Maven
-target/
-!.mvn/wrapper/maven-wrapper.jar
-.mvn/wrapper/maven-wrapper.properties
-
-# Gradle
-build/
-.gradle/
-!gradle/wrapper/gradle-wrapper.jar
-
-# IDEs and Editors
+# Ignore IDE-specific files
 .idea/
 *.iml
-.vscode/
-*.class
 
-# Logs
-logs/
-*.log
+# Ignore build output
+/target/
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Others
-node_modules/
-bin/
+# Ignore sensitive environment variables
 .env
-.pom.xml.tag

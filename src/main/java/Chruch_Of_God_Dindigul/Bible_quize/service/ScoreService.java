@@ -159,9 +159,9 @@ public class ScoreService {
 
     public QuizResultDTO calculateAndSaveScore(QuizResultDTO submission, User user) {
         int correctAnswers = 0;
-        int totalQuestions = submission.answeredQuestions() != null ? submission.answeredQuestions().size() : 0;
+        int total = submission.answeredQuestions() != null ? submission.answeredQuestions().size() : 0;
         // Only iterate if answeredQuestions is not null
-        if (totalQuestions > 0) {
+        if (total > 0) {
             for (AnsweredQuestionDTO answeredQuestion : submission.answeredQuestions()) {
                 if (answeredQuestion.isCorrect()) {
                     correctAnswers++;
@@ -171,7 +171,7 @@ public class ScoreService {
         Score score = new Score();
         score.setUser(user);
         score.setScoreValue(correctAnswers);
-        score.setTotalQuestions(totalQuestions);
+        score.setTotal(total);
         // Store the detailed answers as a JSON string in the database
         score.setAnsweredQuestionsJson(gson.toJson(submission.answeredQuestions()));
         score.setQuizDate(LocalDateTime.now());
@@ -181,8 +181,8 @@ public class ScoreService {
         return new QuizResultDTO(
             savedScore.getId(),
             savedScore.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
-            savedScore.getScoreValue(),
-            savedScore.getTotalQuestions(),
+            savedScore.getScoreValue(), // score
+            savedScore.getTotal(), // total
             submission.answeredQuestions(),
             user.getId(),
             user.getUsername()
@@ -197,8 +197,8 @@ public class ScoreService {
                 return new QuizResultDTO(
                     score.getId(), // quizId
                     score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
-                    score.getScoreValue(), // score
-                    score.getTotalQuestions(), // totalQuestions
+                    score.getScoreValue(), // scoreValue
+                    score.getTotal(), // total
                     null, // answeredQuestions (not needed for list view)
                     user.getId(), // userId
                     user.getUsername() // username
@@ -218,8 +218,8 @@ public class ScoreService {
             .map(score -> new QuizResultDTO(
                 score.getId(), // quizId
                 score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
-                score.getScoreValue(), // score
-                score.getTotalQuestions(), // totalQuestions
+                score.getScoreValue(), // scoreValue
+                score.getTotal(), // total
                 null, // answeredQuestions (not needed for list view)
                 score.getUser().getId(), // userId
                 score.getUser().getUsername() // username
@@ -357,8 +357,8 @@ public class ScoreService {
         QuizResultDTO resultDTO = new QuizResultDTO(
             score.getId(), // quizId
             score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
-            score.getScoreValue(), // score
-            score.getTotalQuestions(), // totalQuestions
+            score.getScoreValue(), // scoreValue
+            score.getTotal(), // total
             answeredQuestions, // answeredQuestions
             user.getId(), // userId
             user.getUsername() // username
@@ -388,7 +388,7 @@ public class ScoreService {
 
         StringBuilder sb = new StringBuilder();
 		sb.append("தேதி: ").append(score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))).append("\n");
-		sb.append("மதிப்பெண்: ").append(score.getScoreValue()).append("/").append(score.getTotalQuestions()).append("\n\n");
+		sb.append("மதிப்பெண்: ").append(score.getScoreValue()).append("/").append(score.getTotal()).append("\n\n");
 
 		int questionNumber = 1;
 		for (AnsweredQuestionDTO answeredQuestion : answeredQuestions) {
@@ -432,8 +432,8 @@ public class ScoreService {
         return new QuizResultDTO(
             score.getId(), // quizId
             score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")), // quizDate
-            score.getScoreValue(), // score
-            score.getTotalQuestions(), // totalQuestions
+            score.getScoreValue(), // scoreValue
+            score.getTotal(), // total
             answeredQuestions, // answeredQuestions
             user.getId(), // userId
             user.getUsername() // username
