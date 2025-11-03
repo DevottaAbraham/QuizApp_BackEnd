@@ -1,4 +1,4 @@
-    FROM openjdk:17-jdk-slim  # Or another suitable base image with Java installed
+    FROM openjdk:17-jdk-slim 
     copy ..
     Run mvn clean package -DskipTests
 
