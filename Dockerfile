@@ -1,5 +1,5 @@
 # Stage 1: Build the application using Maven
-FROM openjdk:17-jdk-slim AS builder
+FROM openjdk:21-jdk-slim AS builder
 WORKDIR /app
 
 # Copy the Maven wrapper and pom.xml to leverage Docker layer caching
@@ -16,7 +16,7 @@ COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
 # Stage 2: Create the final, smaller image
-FROM openjdk:17-jdk-slim
+FROM openjdk:21-slim
 WORKDIR /app
 # Copy only the built application JAR from the 'builder' stage
 COPY --from=builder /app/target/*.jar app.jar
