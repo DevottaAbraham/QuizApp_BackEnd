@@ -6,6 +6,8 @@ WORKDIR /app
 # This step only re-runs if the pom.xml or wrapper files change
 COPY .mvn/ .mvn
 COPY mvnw pom.xml ./
+# Add execute permissions to the Maven wrapper
+RUN chmod +x ./mvnw
 
 # Copy the rest of your application's source code
 COPY src ./src
