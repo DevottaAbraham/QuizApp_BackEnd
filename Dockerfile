@@ -20,5 +20,5 @@ FROM openjdk:21-slim
 WORKDIR /app
 # Copy only the built application JAR from the 'builder' stage
 COPY --from=builder /app/target/*.jar app.jar
-EXPOSE 8081
+EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
