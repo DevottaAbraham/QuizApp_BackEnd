@@ -14,7 +14,7 @@ import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
-import com.itextpdf.layout.Document;
+import com.itextpdf.layout.Document; 
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.google.gson.Gson;
@@ -31,6 +31,8 @@ import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import com.itextpdf.io.font.FontProgram;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.cache.annotation.Cacheable;
@@ -57,13 +59,14 @@ import java.util.stream.Collectors;
 public class ScoreService {
 
     private final ScoreRepository scoreRepository;
-    private final Gson gson = new Gson();
-    private final Type answeredQuestionListType;
+    private final ObjectMapper objectMapper; // Use Jackson's ObjectMapper
+    private final TypeReference<List<AnsweredQuestionDTO>> answeredQuestionListType;
 
     @Autowired
-    public ScoreService(ScoreRepository scoreRepository) {
+    public ScoreService(ScoreRepository scoreRepository, ObjectMapper objectMapper) {
         this.scoreRepository = scoreRepository;
-        this.answeredQuestionListType = new TypeToken<List<AnsweredQuestionDTO>>(){}.getType();
+        this.objectMapper = objectMapper;
+        this.answeredQuestionListType = new TypeReference<>() {};
     }
 
     public List<LeaderboardDTO> getLeaderboard() {
@@ -171,10 +174,15 @@ public class ScoreService {
         Score score = new Score();
         score.setUser(user);
         score.setScoreValue(correctAnswers);
-        score.setTotal(total);
-        // Store the detailed answers as a JSON string in the database
-        score.setAnsweredQuestionsJson(gson.toJson(submission.answeredQuestions()));
+        score.setTotal(total);        
         score.setQuizDate(LocalDateTime.now());
+        // Store the detailed answers as a JSON string in the database
+        try {
+            score.setAnsweredQuestionsJson(objectMapper.writeValueAsString(submission.answeredQuestions()));
+        } catch (IOException e) {
+            // Handle the exception appropriately, maybe log it and throw a runtime exception
+            throw new RuntimeException("Error serializing answered questions to JSON", e);
+        }
         Score savedScore = scoreRepository.save(score);
 
         // Return a DTO with the final score and saved ID
@@ -352,7 +360,12 @@ public class ScoreService {
         }
 
         // Deserialize the stored JSON back into a list of answered questions
-        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), this.answeredQuestionListType);
+        List<AnsweredQuestionDTO> answeredQuestions;
+        try {
+            answeredQuestions = objectMapper.readValue(score.getAnsweredQuestionsJson(), this.answeredQuestionListType);
+        } catch (IOException e) {
+            throw new RuntimeException("Error deserializing answered questions from JSON", e);
+        }
 
         QuizResultDTO resultDTO = new QuizResultDTO(
             score.getId(), // quizId
@@ -384,7 +397,12 @@ public class ScoreService {
         }
 
         // Deserialize the stored JSON back into a list of answered questions
-        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), this.answeredQuestionListType);
+        List<AnsweredQuestionDTO> answeredQuestions;
+        try {
+            answeredQuestions = objectMapper.readValue(score.getAnsweredQuestionsJson(), this.answeredQuestionListType);
+        } catch (IOException e) {
+            throw new RuntimeException("Error deserializing answered questions from JSON", e);
+        }
 
         StringBuilder sb = new StringBuilder();
 		sb.append("தேதி: ").append(score.getQuizDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))).append("\n");
@@ -426,7 +444,13 @@ public class ScoreService {
             throw new org.springframework.security.access.AccessDeniedException("You are not authorized to view this score.");
         }
 
-        List<AnsweredQuestionDTO> answeredQuestions = gson.fromJson(score.getAnsweredQuestionsJson(), answeredQuestionListType);
+        List<AnsweredQuestionDTO> answeredQuestions;
+        try {
+            answeredQuestions = objectMapper.readValue(score.getAnsweredQuestionsJson(), answeredQuestionListType);
+        } catch (IOException e) {
+            throw new RuntimeException("Error deserializing answered questions from JSON", e);
+        }
+
         // CRITICAL FIX: The QuizResultDTO constructor requires all fields. The quizId was missing here.
         // This was causing the 'undefined' error on subsequent actions like downloading the PDF from the modal.
         return new QuizResultDTO(
