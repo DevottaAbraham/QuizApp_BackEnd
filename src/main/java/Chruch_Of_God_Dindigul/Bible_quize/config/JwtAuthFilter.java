@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,12 +17,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
-import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
+import com.itextpdf.io.exceptions.IOException;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,12 +35,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final TokenBlacklistService tokenBlacklistService;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
 
+    // Inject the centralized request matcher for public endpoints
+    @Autowired
+    private RequestMatcher permitAllRequestMatcher;
+
+    /**
+     * This method is the key to the solution. It tells Spring Security to NOT run this filter
+     * if the incoming request matches any of the public endpoints defined in our permitAllRequestMatcher bean.
+     */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        return permitAllRequestMatcher.matches(request);
+    }
+
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
-    ) throws ServletException, IOException {
+    ) throws ServletException, IOException, java.io.IOException {
         String jwt = null;
         final String username;
 
@@ -50,13 +64,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     .map(Cookie::getValue)
                     .findFirst()
                     .orElse(null);
-        }
-
-        if (jwt == null) {
-            // If there's no token, just continue the filter chain.
-            // Spring Security will handle whether the endpoint is public or needs authentication.
-            filterChain.doFilter(request, response);
-            return; // Stop the filter chain.
         }
 
         try {
@@ -92,5 +99,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+
     }
 }

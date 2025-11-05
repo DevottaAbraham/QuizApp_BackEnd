@@ -44,25 +44,6 @@ public class SecurityConfig {
     }
 
     @Bean
-    public RequestMatcher permitAllRequestMatcher() {
-        // This bean centralizes the definition of all public endpoints.
-        // It's used by the JwtAuthFilter to know which requests to ignore.
-        return new OrRequestMatcher(
-            new AntPathRequestMatcher("/api/auth/login"),
-            new AntPathRequestMatcher("/api/auth/register"),
-            new AntPathRequestMatcher("/api/auth/register-admin"),
-            new AntPathRequestMatcher("/api/auth/setup-status"),
-            new AntPathRequestMatcher("/api/auth/refresh"),
-            new AntPathRequestMatcher("/api/auth/admin-forgot-password"),
-            new AntPathRequestMatcher("/api/auth/logout"),
-            new AntPathRequestMatcher("/api/content/home"),
-            new AntPathRequestMatcher("/uploads/**"),
-            new AntPathRequestMatcher("/error"),
-            new AntPathRequestMatcher("/")
-        );
-    }
-
-    @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {        
         return config.getAuthenticationManager();
     }
@@ -84,24 +65,16 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> {
-                    // --- PUBLIC ENDPOINTS ---
-                    // These endpoints are accessible to everyone, without authentication.
-                    // This is the most critical section for fixing the 404/login issue.
+                    // --- PUBLIC ENDPOINTS (No Authentication Required) ---
+                    // As per your excellent suggestion, we are explicitly permitting all
+                    // necessary public routes, especially for authentication and setup.
                     auth
-                        .requestMatchers(
-                                mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**"), // Allow all CORS pre-flight requests
-                                mvcMatcherBuilder.pattern("/api/auth/login"),
-                                mvcMatcherBuilder.pattern("/api/auth/register"),
-                                mvcMatcherBuilder.pattern("/api/auth/register-admin"),
-                                mvcMatcherBuilder.pattern("/api/auth/setup-status"),
-                                mvcMatcherBuilder.pattern("/api/auth/refresh"),
-                                mvcMatcherBuilder.pattern("/api/auth/admin-forgot-password"),
-                                mvcMatcherBuilder.pattern("/"),
-                                mvcMatcherBuilder.pattern("/api/auth/logout"),
-                                mvcMatcherBuilder.pattern("/api/content/home"),
-                                mvcMatcherBuilder.pattern("/uploads/**"),
-                                mvcMatcherBuilder.pattern("/error")
-                        ).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
+                        .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
+                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ROLE_ADMIN")
