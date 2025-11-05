@@ -59,8 +59,11 @@ public class SecurityConfig {
         MvcRequestMatcher.Builder mvcMatcherBuilder = new MvcRequestMatcher.Builder(introspector);
 
         http
-                // Enable CORS and use the default configuration provided by WebConfig
+                // CRITICAL FIX: Explicitly configure Spring Security's CORS handling
+                // to use the same settings defined in WebConfig.java. This ensures
+                // that the security filter chain correctly applies our credential-allowing policy.
                 .cors(Customizer.withDefaults())
+
                 // Disable CSRF, as we'll use stateless authentication (JWT)
                 .csrf(csrf -> csrf.disable())
                 // Set session management to stateless
