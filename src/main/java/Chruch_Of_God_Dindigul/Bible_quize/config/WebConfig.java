@@ -9,11 +9,15 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**") // Apply to all your API endpoints
-            .allowedOrigins("http://localhost:5173") // Your frontend's URL
-            .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-            .allowedHeaders("*") 
-            .allowCredentials(true)
-            .maxAge(3600L); // Optional: How long the pre-flight response can be cached (1 hour)
+        registry.addMapping("/**") // Apply to all endpoints
+                // ✅ Allow both your local frontend and deployed frontend
+                .allowedOrigins(
+                        "http://localhost:5173",
+                        "https://quizapp-1v3h.onrender.com"
+                )
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600L);
     }
 }
