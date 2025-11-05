@@ -26,8 +26,6 @@ import org.springframework.web.multipart.support.MultipartFilter;
 import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
 
-import Chruch_Of_God_Dindigul.Bible_quize.service.UserService;
-
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -36,7 +34,6 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;    
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
-    private final UserService userService; // Inject UserService directly
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -61,13 +58,11 @@ public class SecurityConfig {
 
                 // Disable CSRF, as we'll use stateless authentication (JWT)
                 .csrf(csrf -> csrf.disable())
-                // Set session management to stateless
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                   .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> {
-                    // --- PUBLIC ENDPOINTS ---
-                    // This is the single source of truth for all public endpoints.
-                    // Spring Security will not apply the JwtAuthFilter to these routes.
+                    // --- PUBLIC ENDPOINTS (No Authentication Required) ---
+                    // This is the most critical section for fixing the 401/login issue.
                     auth
                         .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
