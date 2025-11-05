@@ -69,7 +69,7 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         // Permit all OPTIONS requests for CORS preflight
-                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll()
+                       .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll()
                         // Explicitly allow specific admin user endpoints for ADMIN role using hasAuthority for clarity.
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/users/{userId}")).hasAuthority("ROLE_ADMIN")
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/users/{userId}/performance")).hasAuthority("ROLE_ADMIN")

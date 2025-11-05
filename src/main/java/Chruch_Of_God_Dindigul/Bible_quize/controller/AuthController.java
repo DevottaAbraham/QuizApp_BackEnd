@@ -144,7 +144,7 @@ public class AuthController {
         List<String> authorities = savedUser.getAuthorities().stream()
                 .map(authority -> "ROLE_" + authority.getAuthority()) // Ensure ROLE_ prefix
                 .collect(Collectors.toList());
-        claims.put("authorities", authorities);
+         claims.put("authorities", authorities);
 
         String accessToken = jwtService.generateAccessToken(claims, savedUser);
         String refreshToken = jwtService.generateRefreshToken(savedUser);
