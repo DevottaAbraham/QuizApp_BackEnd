@@ -29,21 +29,6 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
-
-    // CRITICAL FIX: Use a List of matchers for more reliable public endpoint checking.
-    private final List<RequestMatcher> publicEndpoints = Arrays.asList(
-            new AntPathRequestMatcher("/api/auth/login"),
-            new AntPathRequestMatcher("/api/auth/register"),
-            new AntPathRequestMatcher("/api/auth/register-admin"),
-            new AntPathRequestMatcher("/api/auth/setup-status"),
-            new AntPathRequestMatcher("/api/auth/refresh"),
-            new AntPathRequestMatcher("/api/auth/admin-forgot-password"),
-            new AntPathRequestMatcher("/api/auth/logout"),
-            new AntPathRequestMatcher("/uploads/**"),
-            new AntPathRequestMatcher("/error"),
-            new AntPathRequestMatcher("/api/content/home")
-    );
-
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -55,14 +40,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        // More robust check for public endpoints
-        boolean isPublicEndpoint = publicEndpoints.stream().anyMatch(matcher -> matcher.matches(request));
-
-        if (isPublicEndpoint) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         String jwt = null;
         final String username;
 
@@ -76,12 +53,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         if (jwt == null) {
-            // CRITICAL SECURITY FIX: If the endpoint is protected and no JWT is present,
-            // we must immediately reject the request.
-            // This is an expected case for unauthenticated users, so we don't need to log it as a warning.
-            // The CustomAuthenticationEntryPoint will log it at a WARN level, which is sufficient.
-            // We simply need to trigger it and stop the chain.
-            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("JWT token is missing.") { });
+            // If there's no token, just continue the filter chain.
+            // Spring Security will handle whether the endpoint is public or needs authentication.
+            filterChain.doFilter(request, response);
             return; // Stop the filter chain.
         }
 
