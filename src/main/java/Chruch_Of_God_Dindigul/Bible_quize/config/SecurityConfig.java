@@ -62,14 +62,13 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> {
                     // --- PUBLIC ENDPOINTS (No Authentication Required) ---
-                    // This is the most critical section for fixing the 401/login issue.
+                    // As per your excellent suggestion, we are explicitly permitting all
+                    // necessary public routes, especially for authentication and setup.
                     auth
                         .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
-                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow Spring's default error page
-                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ROLE_ADMIN")

@@ -39,6 +39,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException, java.io.IOException {
+        // As per your suggestion, we'll add a check to bypass the filter for public auth routes.
+        String path = request.getRequestURI();
+        if (path.startsWith("/api/auth/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // This filter is now only executed for protected endpoints, as defined in SecurityConfig.
         String jwt = null;
         final String username;
