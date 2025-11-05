@@ -18,37 +18,31 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import Chruch_Of_God_Dindigul.Bible_quize.config.JwtProperties;
 
 @Service
 public class JwtService {
 
     @Autowired
     private TokenBlacklistService tokenBlacklistService;
-
-    @Value("${application.security.jwt.secret-key}")
-    private String secretKey;
-
-    @Value("${application.security.jwt.access-token-expiration}")
-    private long accessTokenExpiration;
-
-    @Value("${application.security.jwt.refresh-token-expiration}")
-    private long refreshTokenExpiration;
+    private final JwtProperties jwtProperties;
+    
+    @Autowired
+    public JwtService(JwtProperties jwtProperties) {
+        this.jwtProperties = jwtProperties;
+    }
 
     private SecretKey getSignKey() {
-        // CRITICAL FIX: The secret key is Base64 encoded in application.properties.
-        // It MUST be decoded into raw bytes before being used to create the signing key.
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecretKey());
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateAccessToken(Map<String, Object> claims, UserDetails userDetails) {
         return Jwts.builder()
-                // CRITICAL FIX: The .claims() call was incorrect.
-                // This now correctly adds the 'authorities' map to the token's payload.
                 .claims(claims) // Set the claims payload
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
+                .expiration(new Date(System.currentTimeMillis() + jwtProperties.getAccessTokenExpiration()))
                 .signWith(getSignKey(), Jwts.SIG.HS256)
                 .compact();
     }
@@ -58,7 +52,7 @@ public class JwtService {
                 // No extra claims are needed for the refresh token
                 .subject(userDetails.getUsername())
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
+                .expiration(new Date(System.currentTimeMillis() + jwtProperties.getRefreshTokenExpiration()))
                 .signWith(getSignKey(), Jwts.SIG.HS256)
                 .compact();
     }
@@ -120,10 +114,10 @@ public class JwtService {
     }
 
     public long getRefreshTokenExpiration() {
-        return refreshTokenExpiration;
+        return jwtProperties.getRefreshTokenExpiration();
     }
 
     public long getAccessTokenExpiration() {
-        return accessTokenExpiration;
+        return jwtProperties.getAccessTokenExpiration();
     }
 }
