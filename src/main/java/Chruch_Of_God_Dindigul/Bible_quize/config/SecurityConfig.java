@@ -46,18 +46,6 @@ public class SecurityConfig {
     }
 
     @Bean
-    public RequestMatcher publicEndpoints() {
-        return new OrRequestMatcher(
-            new AntPathRequestMatcher("/api/auth/**"),
-            new AntPathRequestMatcher("/api/content/**"),
-            new AntPathRequestMatcher("/uploads/**"),
-            new AntPathRequestMatcher("/error"),
-            new AntPathRequestMatcher("/")
-        );
-    }
-
-
-    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, HandlerMappingIntrospector introspector) throws Exception {
         // Use MvcRequestMatcher for more precise endpoint matching
         MvcRequestMatcher.Builder mvcMatcherBuilder = new MvcRequestMatcher.Builder(introspector);
@@ -71,11 +59,16 @@ public class SecurityConfig {
                 // Disable CSRF, as we'll use stateless authentication (JWT)
                 .csrf(csrf -> csrf.disable())
                    .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> {
-                    // --- PUBLIC ENDPOINTS (No Authentication Required) ---
+                    // --- PUBLIC ENDPOINTS (No Authentication Required) ---                    
                     auth
                         .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
-                        .requestMatchers(publicEndpoints()).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
+                        .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
+                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ROLE_ADMIN")
@@ -83,8 +76,7 @@ public class SecurityConfig {
                         // --- AUTHENTICATED (ANY ROLE) ENDPOINTS ---
                         // Any other request that is not public or for admins must be authenticated.
                         .anyRequest().authenticated();
-                })                
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                })
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                         .accessDeniedHandler(customAccessDeniedHandler)
