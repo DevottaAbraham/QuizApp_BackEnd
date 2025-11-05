@@ -361,11 +361,16 @@ public class AuthController {
      * @param maxAge   The maximum age of the cookie in seconds.
      */
     private void addTokenCookie(HttpServletResponse response, String name, String value, int maxAge) {
-        // CRITICAL FIX: Set SameSite=None to allow cross-origin cookie usage.
-        // This is essential for modern browsers when frontend and backend are on different ports/domains.
-        String sameSite = useSecureCookies ? "None" : "Lax"; // Use Lax for HTTP/localhost, None for HTTPS
+        // FINAL, DEFINITIVE FIX for cross-domain cookie issues in production.
+        // When running with the "prod" profile (like on Render), we MUST set SameSite=None and Secure=true.
+        // Browsers will reject cross-domain cookies unless both are set.
+        // This logic ensures that in production, the correct attributes are always used.
+        boolean isProduction = "prod".equals(System.getProperty("spring.profiles.active"));
+        String sameSite = isProduction ? "None" : "Lax";
+        boolean secureFlag = isProduction || useSecureCookies;
+
         String cookieHeader = String.format("%s=%s; Max-Age=%d; Path=/; HttpOnly; Secure=%b; SameSite=%s",
-                name, value, maxAge, useSecureCookies, sameSite);
+                name, value, maxAge, secureFlag, sameSite);
         // Use org.springframework.http.HttpHeaders.SET_COOKIE
         response.addHeader(HttpHeaders.SET_COOKIE, cookieHeader);
     }
