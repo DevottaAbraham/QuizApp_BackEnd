@@ -15,6 +15,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -41,11 +44,22 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userService); // Use the injected UserService
-        authProvider.setPasswordEncoder(passwordEncoder());
-        return authProvider;
+    public RequestMatcher permitAllRequestMatcher() {
+        // This bean centralizes the definition of all public endpoints.
+        // It's used by the JwtAuthFilter to know which requests to ignore.
+        return new OrRequestMatcher(
+            new AntPathRequestMatcher("/api/auth/login"),
+            new AntPathRequestMatcher("/api/auth/register"),
+            new AntPathRequestMatcher("/api/auth/register-admin"),
+            new AntPathRequestMatcher("/api/auth/setup-status"),
+            new AntPathRequestMatcher("/api/auth/refresh"),
+            new AntPathRequestMatcher("/api/auth/admin-forgot-password"),
+            new AntPathRequestMatcher("/api/auth/logout"),
+            new AntPathRequestMatcher("/api/content/home"),
+            new AntPathRequestMatcher("/uploads/**"),
+            new AntPathRequestMatcher("/error"),
+            new AntPathRequestMatcher("/")
+        );
     }
 
     @Bean
@@ -68,7 +82,6 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 // Set session management to stateless
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authenticationProvider(authenticationProvider()) // Use the method to get the provider
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> {
                     // --- PUBLIC ENDPOINTS ---
