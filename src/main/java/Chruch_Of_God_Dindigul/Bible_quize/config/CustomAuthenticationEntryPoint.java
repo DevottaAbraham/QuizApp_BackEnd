@@ -24,15 +24,6 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
-        // If the token is simply missing on an initial check, it's a normal flow, not a warning.
-        // This is the expected behavior for any user who is not logged in.
-        if (authException.getMessage().contains("JWT token is missing")) {
-            logger.debug("Authentication check for '{}': No active session found (JWT token is missing). This is normal for unauthenticated users.", request.getRequestURI());
-        } else {
-            // For all other authentication errors (e.g., invalid signature, expired token, user not found),
-            // it's an actual issue that should be logged as a warning.
-            logger.warn("Unauthorized request to {}: {}", request.getRequestURI(), authException.getMessage());
-        }
 
         // Prevent writing to the response if it has already been committed.
         if (response.isCommitted()) {

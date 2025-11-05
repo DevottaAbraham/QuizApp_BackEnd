@@ -83,6 +83,7 @@ public class SecurityConfig {
                                 mvcMatcherBuilder.pattern("/api/auth/setup-status"),
                                 mvcMatcherBuilder.pattern("/api/auth/refresh"),
                                 mvcMatcherBuilder.pattern("/api/auth/admin-forgot-password"),
+                                mvcMatcherBuilder.pattern("/"),
                                 mvcMatcherBuilder.pattern("/api/auth/logout"),
                                 mvcMatcherBuilder.pattern("/api/content/home"),
                                 mvcMatcherBuilder.pattern("/uploads/**"),
