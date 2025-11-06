@@ -55,14 +55,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // --- PUBLIC ENDPOINTS (No Authentication Required) ---
                         .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/auth/**")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/content/**")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(mvcMatcherBuilder.pattern("/admin/**")).hasAuthority("ROLE_ADMIN")
 
                         // --- CATCH-ALL: Any other request must be authenticated ---
                         .anyRequest().authenticated()
