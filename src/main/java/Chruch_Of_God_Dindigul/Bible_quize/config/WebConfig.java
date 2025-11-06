@@ -12,6 +12,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**") // Apply to all endpoints
                 // Allow both your local frontend and deployed frontend
+                
                 .allowedOrigins(
                         "http://localhost:5173",
                         "https://quizapp-1v3h.onrender.com"
@@ -25,19 +26,19 @@ public class WebConfig implements WebMvcConfigurer {
                 .maxAge(3600L);
     }
 
-    /**
-     * CRITICAL FIX for Single-Page Application (SPA) routing.
-     * This configuration ensures that when a user directly navigates to a frontend route
-     * (e.g., /admin/setup, /login) or refreshes such a page, the Spring Boot server
-     * forwards the request to the root `index.html`. This allows the React Router
-     * to take over and render the correct component, preventing 404 errors.
-     *
-     * The pattern `/{path:[^\\.]*}` matches any path that does not contain a dot,
-     * effectively ignoring requests for static assets like .js, .css, .ico, etc.
-     */
+    // Forward all non-API, non-static-file paths to index.html for client-side routing.
+    // This ensures that client-side routing works correctly when the frontend is served from the backend.
+    // The /** pattern should be sufficient to catch all paths not handled by other controllers or resource handlers.
+    // The order of these view controllers matters; more specific paths should come before more general ones.
+
+
    @Override
 public void addViewControllers(ViewControllerRegistry registry) {
-    registry.addViewController("/**") // Changed to catch all paths
-            .setViewName("forward:/index.html");
+    // Forward all paths that do not contain a dot (i.e., are not files) to index.html.
+    // This is the standard way to support client-side routing in a Spring Boot + SPA setup.
+    registry.addViewController("/{path:[^\\.]*}").setViewName("forward:/index.html");
+    registry.addViewController("/**/{path:[^\\.]*}").setViewName("forward:/index.html");
+    // Also forward the root path to index.html
+    registry.addViewController("/").setViewName("forward:/index.html");
 }
 }
