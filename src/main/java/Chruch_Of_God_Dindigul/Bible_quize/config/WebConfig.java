@@ -11,22 +11,19 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**") // Apply to all endpoints
-                // Allow both your local frontend and deployed frontend
-                
                 .allowedOrigins(
                         "http://localhost:5173",
-                        "https://quizapp-1v3h.onrender.com",
-                        "https://quizapp-backend-nxm7.onrender.com" // Also allow the backend's own origin
+                        "https://quizapp-1v3h.onrender.com"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                // CRITICAL FIX: This tells the browser that the server allows cookies
-                // to be sent with cross-origin requests. This is the key to solving
-                // the "JWT token is missing" error in a deployed environment.
-                .allowCredentials(true)
-                .maxAge(3600L);
+                .allowCredentials(true);
     }
 
-    // The addViewControllers method has been removed.
-    // SPA forwarding is now handled by the SpaController.
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/{path:[^\\.]*}").setViewName("forward:/index.html");
+        registry.addViewController("/**/{path:[^\\.]*}").setViewName("forward:/index.html");
+        registry.addViewController("/").setViewName("forward:/index.html");
+    }
 }

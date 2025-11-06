@@ -2,7 +2,6 @@ package Chruch_Of_God_Dindigul.Bible_quize.config;
 
 import Chruch_Of_God_Dindigul.Bible_quize.service.JwtService;
 import Chruch_Of_God_Dindigul.Bible_quize.service.TokenBlacklistService;
-import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,12 +14,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.slf4j.Logger;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-
-import com.itextpdf.io.exceptions.IOException;
+import org.springframework.web.filter.OncePerRequestFilter; // Keep this
+import jakarta.servlet.FilterChain; // Keep this
+import java.io.IOException; // Explicitly import java.io.IOException
 
 import java.util.Arrays;
 import java.util.List;
@@ -29,7 +27,6 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
-    private static final Logger logger = org.slf4j.LoggerFactory.getLogger(JwtAuthFilter.class);
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -40,14 +37,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
-    ) throws ServletException, IOException, java.io.IOException {
-        // As per your suggestion, we'll add a check to bypass the filter for public auth routes.
-        String path = request.getRequestURI();
-        if (path.startsWith("/api/auth/")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
+    ) throws ServletException, java.io.IOException { // Corrected throws clause
         // This filter is now only executed for protected endpoints, as defined in SecurityConfig.
         String jwt = null;
         final String username;
@@ -100,9 +90,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // we must ensure the request is rejected. We delegate this to the entry point.
             // By clearing the context, we ensure the user is treated as unauthenticated.
             SecurityContextHolder.clearContext();
-            logger.debug("Invalid JWT token encountered: {}. Delegating to authentication entry point.", e.getMessage(), e);
-            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("Invalid JWT token", e) {});
-            return; // IMPORTANT: Stop the filter chain here.
+            logger.error("Exception during filter execution. Clearing security context.", e);
+            // Continue the chain. The authorization rules will now reject the request.
         }
 
         filterChain.doFilter(request, response);

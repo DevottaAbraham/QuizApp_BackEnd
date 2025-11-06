@@ -340,6 +340,7 @@ public class AuthController {
             // All checks passed, generate a new access token
             Map<String, Object> claims = Map.of("authorities", user.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()));
             String newAccessToken = jwtService.generateAccessToken(claims, user);
+            logger.info("Generated new access token during refresh: {}", newAccessToken);
             addTokenCookie(response, "accessToken", newAccessToken, (int) (jwtService.getAccessTokenExpiration() / 1000));
             
             logger.info("Token refreshed successfully for user '{}'.", username);
