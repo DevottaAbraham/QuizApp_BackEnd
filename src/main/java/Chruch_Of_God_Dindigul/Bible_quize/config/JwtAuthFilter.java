@@ -2,6 +2,7 @@ package Chruch_Of_God_Dindigul.Bible_quize.config;
 
 import Chruch_Of_God_Dindigul.Bible_quize.service.JwtService;
 import Chruch_Of_God_Dindigul.Bible_quize.service.TokenBlacklistService;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,11 +15,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.slf4j.Logger;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter; // Keep this
-import jakarta.servlet.FilterChain; // Keep this
-import java.io.IOException; // Explicitly import java.io.IOException
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.itextpdf.io.exceptions.IOException;
 
 import java.util.Arrays;
 import java.util.List;
@@ -27,17 +31,32 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
+    private static final Logger logger = org.slf4j.LoggerFactory.getLogger(JwtAuthFilter.class);
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+
+    // CRITICAL FIX: Use a robust request matcher to identify all public paths.
+    // This is more reliable than a simple path.startsWith() check.
+    private final RequestMatcher publicEndpoints = new OrRequestMatcher(
+        new AntPathRequestMatcher("/api/auth/**"),
+        new AntPathRequestMatcher("/api/content/**"),
+        new AntPathRequestMatcher("/uploads/**"),
+        new AntPathRequestMatcher("/error")
+    );
 
     @Override
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
-    ) throws ServletException, java.io.IOException { // Corrected throws clause
+    ) throws ServletException, IOException, java.io.IOException {
+        if (publicEndpoints.matches(request)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // This filter is now only executed for protected endpoints, as defined in SecurityConfig.
         String jwt = null;
         final String username;
@@ -90,8 +109,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // we must ensure the request is rejected. We delegate this to the entry point.
             // By clearing the context, we ensure the user is treated as unauthenticated.
             SecurityContextHolder.clearContext();
-            logger.error("Exception during filter execution. Clearing security context.", e);
-            // Continue the chain. The authorization rules will now reject the request.
+            logger.debug("Invalid JWT token encountered: {}. Delegating to authentication entry point.", e.getMessage(), e);
+            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("Invalid JWT token", e) {});
+            return; // IMPORTANT: Stop the filter chain here.
         }
 
         filterChain.doFilter(request, response);

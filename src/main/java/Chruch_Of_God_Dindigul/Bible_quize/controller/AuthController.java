@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 import java.util.Optional; 
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);

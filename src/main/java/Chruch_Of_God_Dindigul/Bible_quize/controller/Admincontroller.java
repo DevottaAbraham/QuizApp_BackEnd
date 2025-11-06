@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 import org.springframework.security.core.Authentication;
 
 @RestController
-@RequestMapping("/admin")
+@RequestMapping("/api/admin")
 class Admincontroller {
 
     private static final Logger logger = LoggerFactory.getLogger(Admincontroller.class);
