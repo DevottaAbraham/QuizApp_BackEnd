@@ -4,11 +4,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -16,9 +25,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.multipart.support.MultipartFilter;
 import org.springframework.security.web.servlet.util.matcher.MvcRequestMatcher;
 import org.springframework.web.servlet.handler.HandlerMappingIntrospector;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 
 @Configuration
 @EnableWebSecurity
@@ -45,32 +51,32 @@ public class SecurityConfig {
         MvcRequestMatcher.Builder mvcMatcherBuilder = new MvcRequestMatcher.Builder(introspector);
 
         http
-                // Use the global CORS configuration defined in WebConfig.java
+                // CRITICAL FIX: Explicitly configure Spring Security's CORS handling
+                // to use the same settings defined in WebConfig.java. This ensures
+                // that the security filter chain correctly applies our credential-allowing policy.
                 .cors(Customizer.withDefaults())
+
                 // Disable CSRF, as we'll use stateless authentication (JWT)
                 .csrf(csrf -> csrf.disable())
-                // Set session management to STATELESS
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Define authorization rules from most specific (public) to most general (authenticated)
-                .authorizeHttpRequests(auth -> auth
-                        // --- PUBLIC ENDPOINTS (No Authentication Required) ---
-                       // Allow all auth-related endpoints
-
-                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/auth/**")).permitAll()  // Allow all auth-related endpoints
-                        .requestMatchers(mvcMatcherBuilder.pattern("/content/**")).permitAll() // Allow public content
+                   .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(auth -> {
+                    // --- PUBLIC ENDPOINTS (No Authentication Required) ---
+                    auth
+                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
-                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow Spring's default error page
+                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
-                        .requestMatchers(mvcMatcherBuilder.pattern("/admin/**")).hasAuthority("ROLE_ADMIN")
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ROLE_ADMIN")
 
-                        // --- CATCH-ALL: Any other request must be authenticated ---
-                        .anyRequest().authenticated()
-                )
-                // Add the custom JWT filter before the standard Spring Security filters
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                // Configure custom exception handlers
+                        // --- AUTHENTICATED (ANY ROLE) ENDPOINTS ---
+                        // Any other request that is not public or for admins must be authenticated.
+                        .anyRequest().authenticated();
+                })
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                         .accessDeniedHandler(customAccessDeniedHandler)

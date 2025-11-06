@@ -15,7 +15,8 @@ public class WebConfig implements WebMvcConfigurer {
                 
                 .allowedOrigins(
                         "http://localhost:5173",
-                        "https://quizapp-1v3h.onrender.com"
+                        "https://quizapp-1v3h.onrender.com",
+                        "https://quizapp-backend-nxm7.onrender.com" // Also allow the backend's own origin
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
