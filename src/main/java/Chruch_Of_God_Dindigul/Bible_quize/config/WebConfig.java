@@ -35,9 +35,11 @@ public class WebConfig implements WebMvcConfigurer {
      * The pattern `/{path:[^\\.]*}` matches any path that does not contain a dot,
      * effectively ignoring requests for static assets like .js, .css, .ico, etc.
      */
-    @Override
-    public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addViewController("/{path:[^\\.]*}")
-                .setViewName("forward:/index.html");
-    }
+   
+   @Override
+public void addViewControllers(ViewControllerRegistry registry) {
+    registry.addViewController("/{path:[^\\.]*}")
+            .setViewName("forward:/index.html");
+}
+
 }
