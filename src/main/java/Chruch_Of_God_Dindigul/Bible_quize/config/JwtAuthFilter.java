@@ -90,8 +90,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // we must ensure the request is rejected. We delegate this to the entry point.
             // By clearing the context, we ensure the user is treated as unauthenticated.
             SecurityContextHolder.clearContext();
-            logger.debug("Invalid JWT token encountered. Clearing security context.", e); // Pass the exception object directly
-            // Continue the chain. The authorization rules will now reject the request.
+            logger.debug("Invalid JWT token encountered: {}. Delegating to authentication entry point.");
+            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("Invalid JWT token", e) {});
+            return; // IMPORTANT: Stop the filter chain here.
         }
 
         filterChain.doFilter(request, response);

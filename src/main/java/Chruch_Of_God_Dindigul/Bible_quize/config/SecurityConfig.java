@@ -55,11 +55,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // --- PUBLIC ENDPOINTS (No Authentication Required) ---
                         .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/auth/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/content/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
-                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/auth/**")).permitAll() // Allow all auth-related endpoints
+                        .requestMatchers(mvcMatcherBuilder.pattern("/content/**")).permitAll() // Allow public content
+                        .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
+                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow Spring's default error page
+                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll() // Allow root access
 
                         // --- ADMIN-ONLY ENDPOINTS ---
                         .requestMatchers(mvcMatcherBuilder.pattern("/admin/**")).hasAuthority("ROLE_ADMIN")
