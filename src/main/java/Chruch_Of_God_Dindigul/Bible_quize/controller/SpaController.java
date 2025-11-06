@@ -13,8 +13,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class SpaController {
     // This mapping acts as a catch-all for any path that does not contain a dot (i.e., is not a file)
     // and is not an API route. It forwards the request to index.html, allowing the client-side
-    // router to handle it. This is the key to fixing the 404 error for pages like /setup.
-    @RequestMapping(value = "/{path:[^\\.]*}")
+    // router to handle it. This fixes 404 errors for pages like /setup or /admin/dashboard.
+    @RequestMapping(value = {
+            "/",
+            "/{path:[^\\.]*}",
+            "/**/{path:[^\\.]*}"
+    })
     public String forward() {
         return "forward:/index.html";
     }

@@ -20,10 +20,6 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowCredentials(true);
     }
 
-    @Override
-    public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addViewController("/{path:[^\\.]*}").setViewName("forward:/index.html");
-        registry.addViewController("/**/{path:[^\\.]*}").setViewName("forward:/index.html");
-        registry.addViewController("/").setViewName("forward:/index.html");
-    }
+    // The addViewControllers method is removed to prevent conflicts with the PathPatternParser
+    // and to delegate SPA routing to the dedicated SpaController.
 }
