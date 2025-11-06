@@ -1,15 +1,23 @@
 package Chruch_Of_God_Dindigul.Bible_quize.config;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -37,38 +45,54 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
+    // Define a RequestMatcher for all public endpoints
+    private RequestMatcher publicEndpoints(HandlerMappingIntrospector introspector) {
+        MvcRequestMatcher.Builder mvcMatcherBuilder = new MvcRequestMatcher.Builder(introspector);
+        return new OrRequestMatcher(
+            mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**"), // Allow all CORS pre-flight
+            mvcMatcherBuilder.pattern("/auth/**"), // Allow all auth-related endpoints
+            mvcMatcherBuilder.pattern("/content/**"), // Allow public content
+            mvcMatcherBuilder.pattern("/uploads/**"), // Allow access to uploaded files
+            mvcMatcherBuilder.pattern("/error"), // Allow Spring's default error page
+            mvcMatcherBuilder.pattern("/")
+        );
+    }
+
+    // SecurityFilterChain for public endpoints (no JWT filter)
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, HandlerMappingIntrospector introspector) throws Exception {
-        // Use MvcRequestMatcher for more precise, introspection-based endpoint matching.
+    public SecurityFilterChain publicFilterChain(HttpSecurity http, HandlerMappingIntrospector introspector) throws Exception {
+        http
+            .securityMatcher(publicEndpoints(introspector)) // This chain only applies to public paths
+            .cors(Customizer.withDefaults())
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll()); // All requests matching this chain are permitted
+
+        return http.build();
+    }
+
+    @Bean
+    public SecurityFilterChain protectedFilterChain(HttpSecurity http, HandlerMappingIntrospector introspector) throws Exception {
+        // Use MvcRequestMatcher for more precise endpoint matching
         MvcRequestMatcher.Builder mvcMatcherBuilder = new MvcRequestMatcher.Builder(introspector);
 
         http
-                // Use the CORS configuration defined in WebConfig.java
+                // CRITICAL FIX: Explicitly configure Spring Security's CORS handling
+                // to use the same settings defined in WebConfig.java. This ensures
+                // that the security filter chain correctly applies our credential-allowing policy.
                 .cors(Customizer.withDefaults())
-                // Disable CSRF as we are using stateless JWT authentication
+                // Disable CSRF, as we'll use stateless authentication (JWT)
                 .csrf(csrf -> csrf.disable())
-                // Set session management to STATELESS
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Define authorization rules from most specific to most general
-                .authorizeHttpRequests(auth -> auth
-                        // --- PUBLIC ENDPOINTS (No Authentication Required) ---
-                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
-                        .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
-                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow Spring's default error page
-                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll() // Allow root access
-
-                        // --- ADMIN-ONLY ENDPOINTS ---
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ROLE_ADMIN")
+                   .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(auth -> {
+                        // --- ADMIN-ONLY ENDPOINTS (now without /api prefix) ---
+                        auth.requestMatchers(mvcMatcherBuilder.pattern("/admin/**")).hasAuthority("ROLE_ADMIN");
 
                         // --- AUTHENTICATED (ANY ROLE) ENDPOINTS ---
                         // Any other request that is not public or for admins must be authenticated.
-                        .anyRequest().authenticated()
-                )
-                // Add the custom JWT filter before the standard authentication filter
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                // Configure custom exception handlers for authentication and access denied errors
+                        auth.anyRequest().authenticated();
+                })
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(customAuthenticationEntryPoint)
                         .accessDeniedHandler(customAccessDeniedHandler)
