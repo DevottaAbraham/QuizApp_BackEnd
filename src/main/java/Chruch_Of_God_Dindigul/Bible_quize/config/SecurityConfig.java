@@ -67,10 +67,13 @@ public class SecurityConfig {
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
-                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow Spring's default error page
+                        .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ROLE_ADMIN")
+                        // CRITICAL FIX: Use hasAuthority("ADMIN") instead of hasAuthority("ROLE_ADMIN").
+                        // The hasAuthority() method automatically adds the "ROLE_" prefix for the check.
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ADMIN")
 
                         // --- AUTHENTICATED (ANY ROLE) ENDPOINTS ---
                         // Any other request that is not public or for admins must be authenticated.
