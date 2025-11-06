@@ -34,11 +34,9 @@ public class WebConfig implements WebMvcConfigurer {
 
    @Override
 public void addViewControllers(ViewControllerRegistry registry) {
-    // Forward all paths that do not contain a dot (i.e., are not files) to index.html.
-    // This is the standard way to support client-side routing in a Spring Boot + SPA setup.
-    registry.addViewController("/{path:[^\\.]*}").setViewName("forward:/index.html");
+    // Forward all paths not handled by an explicit controller mapping to index.html.
+    // This is a common strategy for Single Page Applications (SPAs).
+    // It ensures that client-side routes are handled by the frontend, while API routes are handled by the backend.
     registry.addViewController("/**/{path:[^\\.]*}").setViewName("forward:/index.html");
-    // Also forward the root path to index.html
-    registry.addViewController("/").setViewName("forward:/index.html");
 }
 }
