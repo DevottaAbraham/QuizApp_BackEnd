@@ -54,8 +54,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (jwt == null) {
             // Since this filter only runs on protected routes, if the token is null,
-            // we just continue the chain. Spring Security's final filter will reject
-            // the request because it's unauthenticated.
+            // we just continue the chain. Spring Security's authorization rules will
+            // then determine if the request is allowed (for a public endpoint) or
+            // rejected (for a protected endpoint).
             filterChain.doFilter(request, response);
             return;
         }
@@ -88,8 +89,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             // If any exception occurs during token validation (e.g., token expired, malformed),
             // we must ensure the request is rejected. We delegate this to the entry point.
-            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("Invalid JWT token: " + e.getMessage()) {});
-            return; // Stop the filter chain
+            // By clearing the context, we ensure the user is treated as unauthenticated.
+            SecurityContextHolder.clearContext();
+            logger.debug("Invalid JWT token encountered: {}. Clearing security context.", e.getMessage());
+            // Continue the chain. The authorization rules will now reject the request.
         }
 
         filterChain.doFilter(request, response);

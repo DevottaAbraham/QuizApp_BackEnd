@@ -377,8 +377,7 @@ public class AuthController {
      * @return A DTO with the current user's information.
      */
     @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()") // Allow any authenticated user to get their own details
-    public ResponseEntity<UserDTO> getCurrentAuthenticatedUser(Authentication authentication) {
+    public ResponseEntity<UserDTO> getCurrentUser(Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated() || !(authentication.getPrincipal() instanceof User)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
