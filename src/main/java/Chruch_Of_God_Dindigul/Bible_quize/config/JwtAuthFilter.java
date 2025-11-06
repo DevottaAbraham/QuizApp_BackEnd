@@ -2,6 +2,7 @@ package Chruch_Of_God_Dindigul.Bible_quize.config;
 
 import Chruch_Of_God_Dindigul.Bible_quize.service.JwtService;
 import Chruch_Of_God_Dindigul.Bible_quize.service.TokenBlacklistService;
+import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,9 +17,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter; // Keep this
-import jakarta.servlet.FilterChain; // Keep this
-import java.io.IOException; // Explicitly import java.io.IOException
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.itextpdf.io.exceptions.IOException;
 
 import java.util.Arrays;
 import java.util.List;
@@ -37,16 +38,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
-    ) throws ServletException, java.io.IOException { // Corrected throws clause
-        // FINAL, DEFINITIVE FIX: Explicitly bypass the filter for all public endpoints.
-        // This prevents the filter from trying to validate an expired token on a public route,
-        // which was the root cause of the 401 errors on /auth/setup-status.
-        String path = request.getRequestURI();
-        if (path.startsWith("/auth/") || path.startsWith("/content/") || path.startsWith("/uploads/")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
+    ) throws ServletException, IOException, java.io.IOException {
         // This filter is now only executed for protected endpoints, as defined in SecurityConfig.
         String jwt = null;
         final String username;
@@ -99,7 +91,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // we must ensure the request is rejected. We delegate this to the entry point.
             // By clearing the context, we ensure the user is treated as unauthenticated.
             SecurityContextHolder.clearContext();
-            logger.debug("Invalid JWT token encountered: {}. Delegating to authentication entry point.");
+            logger.debug("Invalid JWT token encountered: {}. Delegating to authentication entry point.", e.getMessage());
             customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("Invalid JWT token", e) {});
             return; // IMPORTANT: Stop the filter chain here.
         }

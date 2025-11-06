@@ -59,7 +59,6 @@ public class SecurityConfig {
                         .requestMatchers(mvcMatcherBuilder.pattern("/content/**")).permitAll() // Allow public content
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
                         .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll() // Allow Spring's default error page
-                        .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll() // Allow root access
 
                         // --- ADMIN-ONLY ENDPOINTS ---
                         .requestMatchers(mvcMatcherBuilder.pattern("/admin/**")).hasAuthority("ROLE_ADMIN")
