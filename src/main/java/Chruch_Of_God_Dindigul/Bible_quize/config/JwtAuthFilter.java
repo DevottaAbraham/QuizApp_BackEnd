@@ -38,6 +38,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, java.io.IOException { // Corrected throws clause
+        // FINAL, DEFINITIVE FIX: Explicitly bypass the filter for all public endpoints.
+        // This prevents the filter from trying to validate an expired token on a public route,
+        // which was the root cause of the 401 errors on /auth/setup-status.
+        String path = request.getRequestURI();
+        if (path.startsWith("/auth/") || path.startsWith("/content/") || path.startsWith("/uploads/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // This filter is now only executed for protected endpoints, as defined in SecurityConfig.
         String jwt = null;
         final String username;
