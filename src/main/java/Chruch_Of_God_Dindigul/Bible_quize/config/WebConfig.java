@@ -26,17 +26,6 @@ public class WebConfig implements WebMvcConfigurer {
                 .maxAge(3600L);
     }
 
-    // Forward all non-API, non-static-file paths to index.html for client-side routing.
-    // This ensures that client-side routing works correctly when the frontend is served from the backend.
-    // The /** pattern should be sufficient to catch all paths not handled by other controllers or resource handlers.
-    // The order of these view controllers matters; more specific paths should come before more general ones.
-
-
-   @Override
-public void addViewControllers(ViewControllerRegistry registry) {
-    // Forward all paths not handled by an explicit controller mapping to index.html.
-    // This is a common strategy for Single Page Applications (SPAs).
-    // It ensures that client-side routes are handled by the frontend, while API routes are handled by the backend.
-    registry.addViewController("/**/{path:[^\\.]*}").setViewName("forward:/index.html");
-}
+    // The addViewControllers method has been removed.
+    // SPA forwarding is now handled by the SpaController.
 }
