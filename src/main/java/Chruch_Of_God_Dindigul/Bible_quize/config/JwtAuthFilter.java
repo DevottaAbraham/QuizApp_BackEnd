@@ -40,15 +40,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     // CRITICAL FIX: Use a robust request matcher to identify all public paths.
     // This is more reliable than a simple path.startsWith() check.
     private final RequestMatcher publicEndpoints = new OrRequestMatcher(
-        new AntPathRequestMatcher("/api/auth/**"),
-        new AntPathRequestMatcher("/api/content/**"),
-        new AntPathRequestMatcher("/uploads/**"),
-        new AntPathRequestMatcher("/error"),
-        // CRITICAL FIX: Add matchers for the SPA entry points and static assets.
-        // This prevents the filter from incorrectly trying to process a JWT for a page load
-        // or a static file, which was causing the 500 Internal Server Error.
-        new AntPathRequestMatcher("/**/{path:[^\\.]*}"), // Matches SPA routes like /setup, /dashboard
-        new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}") // Matches static files
+            // --- Public API Endpoints ---
+            new AntPathRequestMatcher("/api/auth/**"),
+            new AntPathRequestMatcher("/api/content/**"),
+            // --- Static Resources & File Uploads ---
+            new AntPathRequestMatcher("/uploads/**"),
+            new AntPathRequestMatcher("/error"),
+            // --- SPA Frontend Routes & Assets ---
+            new AntPathRequestMatcher("/"), // Root path for index.html
+            new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"), // All static assets
+            new AntPathRequestMatcher("/{path:^(?!api|uploads|error).*$}/**") // All non-API, non-file routes
     );
 
     @Override
