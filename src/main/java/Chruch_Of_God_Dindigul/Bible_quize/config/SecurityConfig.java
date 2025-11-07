@@ -69,6 +69,10 @@ public class SecurityConfig {
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
                         .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
+                        // CRITICAL FIX: Permit access to all static assets (HTML, JS, CSS, images, etc.).
+                        // This allows the browser to load the frontend application files without authentication.
+                        // This pattern matches common file extensions.
+                        .requestMatchers(mvcMatcherBuilder.pattern("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}")).permitAll()
                         // CRITICAL FIX: Allow all non-API, non-static file requests to be forwarded to the SPA.
                         // This regex matches paths that do not contain a dot, preventing it from matching file requests (e.g., .css, .js).
                         // This allows the SpaController to handle client-side routing.
