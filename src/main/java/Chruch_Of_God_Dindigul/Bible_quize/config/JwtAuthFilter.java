@@ -43,7 +43,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         new AntPathRequestMatcher("/api/auth/**"),
         new AntPathRequestMatcher("/api/content/**"),
         new AntPathRequestMatcher("/uploads/**"),
-        new AntPathRequestMatcher("/error")
+        new AntPathRequestMatcher("/error"),
+        // CRITICAL FIX: Add matchers for the SPA entry points and static assets.
+        // This prevents the filter from incorrectly trying to process a JWT for a page load
+        // or a static file, which was causing the 500 Internal Server Error.
+        new AntPathRequestMatcher("/**/{path:[^\\.]*}"), // Matches SPA routes like /setup, /dashboard
+        new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}") // Matches static files
     );
 
     @Override
