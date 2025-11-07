@@ -16,5 +16,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // Expose the 'uploads' directory to be accessible via '/uploads/**'
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadDir + "/");
+
+        // CRITICAL FIX: Serve static assets (JS, CSS, images) from the classpath.
+        // This ensures the frontend application's files are served correctly.
+        registry.addResourceHandler("/**")
+                .addResourceLocations("classpath:/static/");
     }
 }
