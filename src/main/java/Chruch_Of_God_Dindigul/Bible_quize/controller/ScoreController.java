@@ -18,7 +18,7 @@ import java.io.ByteArrayInputStream;
 import java.util.List;
 
 @RestController
-@RequestMapping("/scores")
+@RequestMapping("/api/scores")
 public class ScoreController {
 
     private final ScoreService scoreService;

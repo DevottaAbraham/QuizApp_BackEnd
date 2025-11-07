@@ -18,7 +18,7 @@ import java.util.Collections;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/quizzes")
+@RequestMapping("/api/quizzes")
 public class QuizController {
 
     private final QuestionService questionService;
