@@ -82,7 +82,7 @@ public class SecurityConfig {
                         // CRITICAL FIX: Allow all non-API, non-static file requests to be forwarded to the SPA.
                         // This regex matches paths that do not contain a dot, preventing it from matching file requests (e.g., .css, .js).
                         // This allows the SpaController to handle client-side routing.
-                        .requestMatchers(mvcMatcherBuilder.pattern("/**/{path:[^\\.]*}")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/{path:^(?!api|uploads|error).*$}/**")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
                         // CRITICAL FIX: Use hasAuthority("ADMIN") instead of hasAuthority("ROLE_ADMIN").
