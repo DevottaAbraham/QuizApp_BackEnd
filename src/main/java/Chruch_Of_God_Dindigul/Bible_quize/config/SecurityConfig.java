@@ -63,8 +63,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     // --- PUBLIC ENDPOINTS (No Authentication Required) ---
                     auth
-                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/**")).permitAll() // Allow all auth-related endpoints
+                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight                        
+                        // CRITICAL FIX: Be specific about which auth endpoints are public.
+                        // Using a wildcard like "/api/auth/**" incorrectly exposed protected endpoints like "/api/auth/me".
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/login")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/register")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/register-admin")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/setup-status")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/refresh")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
                         .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()

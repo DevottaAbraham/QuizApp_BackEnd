@@ -41,7 +41,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     // This is more reliable than a simple path.startsWith() check.
     private final RequestMatcher publicEndpoints = new OrRequestMatcher(
             // --- Public API Endpoints ---
-            new AntPathRequestMatcher("/api/auth/**"),
+            // CRITICAL FIX: Align with SecurityConfig by specifying exact public auth endpoints.
+            new AntPathRequestMatcher("/api/auth/login"),
+            new AntPathRequestMatcher("/api/auth/register"),
+            new AntPathRequestMatcher("/api/auth/register-admin"),
+            new AntPathRequestMatcher("/api/auth/setup-status"),
+            new AntPathRequestMatcher("/api/auth/refresh"),
             new AntPathRequestMatcher("/api/content/**"),
             // --- Static Resources & File Uploads ---
             new AntPathRequestMatcher("/uploads/**"),
@@ -49,7 +54,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // --- SPA Frontend Routes & Assets ---
             new AntPathRequestMatcher("/"), // Root path for index.html
             new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"), // All static assets
-            new AntPathRequestMatcher("/{path:^(?!api|uploads|error).*$}/**") // All non-API, non-file routes
+            // CRITICAL FIX: Replace the complex regex with the same simple and effective pattern used in SecurityConfig.
+            // This ensures that any non-file, non-API route (like /login, /setup, /dashboard) is correctly identified as public.
+            new AntPathRequestMatcher("/**/{path:[^\\.]*}") // All non-API, non-file routes
     );
 
     @Override
