@@ -8,7 +8,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import io.jsonwebtoken.Claims;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,20 +22,30 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import com.itextpdf.io.exceptions.IOException;
-
+// Removed conflicting import: import com.itextpdf.io.exceptions.IOException;
+import java.io.IOException; // Correct import for java.io.IOException
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
-@RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
     private static final Logger logger = org.slf4j.LoggerFactory.getLogger(JwtAuthFilter.class);
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
+
+    // CRITICAL FIX: Remove @RequiredArgsConstructor and create an explicit constructor.
+    // This resolves IDE confusion and makes dependency injection clearer, especially
+    // when mixing final injected fields with final initialized fields like 'publicEndpoints'.
+    @Autowired
+    public JwtAuthFilter(JwtService jwtService, UserDetailsService userDetailsService, TokenBlacklistService tokenBlacklistService, CustomAuthenticationEntryPoint customAuthenticationEntryPoint) {
+        this.jwtService = jwtService;
+        this.userDetailsService = userDetailsService;
+        this.tokenBlacklistService = tokenBlacklistService;
+        this.customAuthenticationEntryPoint = customAuthenticationEntryPoint;
+    }
 
     // CRITICAL FIX: Use a robust request matcher to identify all public paths.
     // This is more reliable than a simple path.startsWith() check.
@@ -51,15 +61,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             new AntPathRequestMatcher("/api/content/**"),
             // --- Static Resources & File Uploads ---
             new AntPathRequestMatcher("/uploads/**"),
-            new AntPathRequestMatcher("/error"),
+            new AntPathRequestMatcher("/error")
             // --- SPA Frontend Routes & Assets ---
-            new AntPathRequestMatcher("/"), // Root path for index.html
-            new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"), // All static assets
+            // new AntPathRequestMatcher("/"), // Root path for index.html
+            // new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"), // All static assets
             // CRITICAL FIX: The SPA routing pattern ("/**/{path:[^\\.]*}") is removed from the filter.
             // SecurityConfig is already configured to permitAll() for these routes. The filter's job
             // is to process tokens for protected routes, not to decide if a route is public.
             // By removing this, we let SecurityConfig be the single source of truth for authorization.
-            new AntPathRequestMatcher("/**/{path:[^\\.]*}") // This line is correct as is, the comment explains the logic.
+            // new AntPathRequestMatcher("/**/{path:[^\\.]*}") // This is removed.
     );
 
     @Override
@@ -67,7 +77,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
-    ) throws ServletException, IOException, java.io.IOException {
+    ) throws ServletException, IOException {
         if (publicEndpoints.matches(request)) {
             filterChain.doFilter(request, response);
             return;
