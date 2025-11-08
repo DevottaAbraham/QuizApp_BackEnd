@@ -41,7 +41,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     // This is more reliable than a simple path.startsWith() check.
     private final RequestMatcher publicEndpoints = new OrRequestMatcher(
             // --- Public API Endpoints ---
-            new AntPathRequestMatcher("/api/auth/**"),
+            // CRITICAL FIX: Align with SecurityConfig by specifying exact public auth endpoints.
+            // Using a wildcard incorrectly made protected endpoints like "/api/auth/me" public to the filter.
+            new AntPathRequestMatcher("/api/auth/login"),
+            new AntPathRequestMatcher("/api/auth/register"),
+            new AntPathRequestMatcher("/api/auth/register-admin"),
+            new AntPathRequestMatcher("/api/auth/setup-status"),
+            new AntPathRequestMatcher("/api/auth/refresh"),
             new AntPathRequestMatcher("/api/content/**"),
             // --- Static Resources & File Uploads ---
             new AntPathRequestMatcher("/uploads/**"),
