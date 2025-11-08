@@ -13,11 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 public class SpaController {
     // This mapping acts as a catch-all for any path that does not contain a dot (i.e., is not a file)
     // and is not an API route. It forwards the request to index.html, allowing the client-side
-    // router to handle it. This fixes 404 errors for pages like /setup, /dashboard, etc.
-    // CRITICAL FIX: The pattern uses a negative lookahead `(?!api|uploads|error|.*\\..*$)` to match
-    // any path that does NOT start with 'api', 'uploads', 'error', and does NOT contain a dot.
-    // This is the most robust way to separate SPA routes from API calls and static file requests.
-    @RequestMapping(value = {"/", "/{path:(?!api|uploads|error|.*\\..*$).*}/**"})
+    // router to handle it. This fixes 404 errors on page reload for routes like /setup, /dashboard, etc.
+    // CRITICAL FIX: This pattern is aligned with SecurityConfig and correctly captures all non-file, non-API paths.
+    // It matches the root ("/") and any path that does not contain a dot in its final segment.
+    @RequestMapping(value = {"/", "/**/{path:[^\\.]*}"})
     public String forward() {
         return "forward:/index.html";
     }
