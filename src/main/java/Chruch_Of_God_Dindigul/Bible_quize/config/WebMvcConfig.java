@@ -17,10 +17,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadDir + "/");
 
-        // CRITICAL FIX: Restore a resource handler for static assets, but with a specific pattern.
-        // This pattern matches files with common extensions, ensuring that JS, CSS, and images are served
-        // from the 'static' directory without conflicting with API routes. This resolves the "spinning loader" issue.
-        registry.addResourceHandler("/**")
-                .addResourceLocations("classpath:/static/");
+        // CRITICAL FIX: The overly broad "/**" resource handler is removed.
+        // Spring Boot's default behavior is to automatically serve content from "classpath:/static/".
+        // Removing this explicit, greedy handler resolves the conflict where it was incorrectly
+        // intercepting both API calls and SPA routes, causing 404 errors.
     }
 }
