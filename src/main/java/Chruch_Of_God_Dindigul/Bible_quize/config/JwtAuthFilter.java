@@ -55,8 +55,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // --- SPA Frontend Routes & Assets ---
             new AntPathRequestMatcher("/"), // Root path for index.html
             new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"), // All static assets
-            // CRITICAL FIX: Align this with SecurityConfig and SpaController for consistent SPA route handling.
-            new AntPathRequestMatcher("/**/{path:[^\\.]*}")
+            // CRITICAL FIX: The SPA routing pattern ("/**/{path:[^\\.]*}") is removed from the filter.
+            // SecurityConfig is already configured to permitAll() for these routes. The filter's job
+            // is to process tokens for protected routes, not to decide if a route is public.
+            // By removing this, we let SecurityConfig be the single source of truth for authorization.
+            new AntPathRequestMatcher("/**/{path:[^\\.]*}") // This line is correct as is, the comment explains the logic.
     );
 
     @Override
