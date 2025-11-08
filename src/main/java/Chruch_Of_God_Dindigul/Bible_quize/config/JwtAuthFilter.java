@@ -61,15 +61,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             new AntPathRequestMatcher("/api/content/**"),
             // --- Static Resources & File Uploads ---
             new AntPathRequestMatcher("/uploads/**"),
-            new AntPathRequestMatcher("/error"),
+            new AntPathRequestMatcher("/error"), // Trailing comma removed from original if present
             // --- SPA Frontend Routes & Assets ---
             // CRITICAL FIX: Restore the SPA and static asset patterns to the filter's public list.
             // The filter MUST ignore these routes to allow the SpaController to handle them.
-            // This resolves the 404 error on initial page load. Also, remove the stray leading comma.
+            // This resolves the 404 error on initial page load.
             new AntPathRequestMatcher("/"), // Root path for index.html
             new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"), // All static assets
-            // CRITICAL FIX: Replace the broken, invalid pattern with the correct and consistent one for SPA routes.
-            new AntPathRequestMatcher("/**/{path:[^\\.]*}") // All non-API, non-file routes
+            new AntPathRequestMatcher("/**/{path:[^\\.]*}") // All non-API, non-file SPA routes
     );
 
     @Override
