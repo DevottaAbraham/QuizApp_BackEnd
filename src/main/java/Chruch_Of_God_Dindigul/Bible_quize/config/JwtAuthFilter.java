@@ -68,7 +68,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // This resolves the 404 error on initial page load.
             new AntPathRequestMatcher("/"), // Root path for index.html
             new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"), // All static assets
-            new AntPathRequestMatcher("/**/{path:[^\\.]*}") // All non-API, non-file SPA routes
+            new AntPathRequestMatcher("/**/{path:[^\\.]*}") // This is removed.
     );
 
     @Override
