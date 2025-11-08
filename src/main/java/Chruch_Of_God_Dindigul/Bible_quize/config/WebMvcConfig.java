@@ -17,9 +17,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadDir + "/");
 
-        // CRITICAL FIX: The overly broad "/**" resource handler is removed.
-        // Spring Boot's default behavior is to automatically serve content from "classpath:/static/".
-        // Removing this explicit, greedy handler resolves the conflict where it was incorrectly
-        // intercepting both API calls and SPA routes, causing 404 errors.
+        // CRITICAL FIX: Restore the resource handler for static assets.
+        // While the "/**" pattern can be greedy, it is necessary here because the SpaController
+        // forwards to "index.html". Without this handler, the server doesn't know how to serve index.html.
+        registry.addResourceHandler("/**")
+                .addResourceLocations("classpath:/static/");
     }
 }
