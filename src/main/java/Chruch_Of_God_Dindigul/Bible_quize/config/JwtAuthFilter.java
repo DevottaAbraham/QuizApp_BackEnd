@@ -94,12 +94,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     .orElse(null);
         }
 
+        // CRITICAL FIX: If the token is null, we must immediately stop and delegate to the entry point.
+        // The previous logic incorrectly continued the filter chain, causing the request to be
+        // processed without authentication and leading to 404s or other access errors downstream.
         if (jwt == null) {
-            // Since this filter only runs on protected routes, if the token is null,
-            // we just continue the chain. Spring Security's authorization rules will
-            // then determine if the request is allowed (for a public endpoint) or
-            // rejected (for a protected endpoint).
-            filterChain.doFilter(request, response);
+            customAuthenticationEntryPoint.commence(request, response, new org.springframework.security.core.AuthenticationException("JWT token is missing") {});
             return;
         }
 
@@ -138,7 +137,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return; // IMPORTANT: Stop the filter chain here.
         }
 
+        // If authentication was successful, continue the filter chain.
         filterChain.doFilter(request, response);
-
     }
 }
