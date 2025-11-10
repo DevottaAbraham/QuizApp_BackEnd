@@ -46,11 +46,11 @@ public class QuizController {
         // The previous logic incorrectly blocked users if they had any score after the release date,
         // preventing them from taking future quizzes.
         LocalDateTime quizReleaseDate = activeQuestions.get(0).getReleaseDate(); // Assuming all active questions have the same window
-        LocalDateTime quizDisappearDate = activeQuestions.get(0).getDisappearDate();
 
+        // CRITICAL FIX: The logic was inverted. We must check if a score exists for the current user
+        // that was submitted *after* the current quiz's release date.
         boolean hasScoreInWindow = scoreService.getScoresForUserSince(currentUser, quizReleaseDate)
-            .stream()
-            .anyMatch(score -> !score.getQuizDate().isAfter(quizDisappearDate)); // Check if any score date is within the window
+            .stream().findAny().isPresent();
 
         if (hasScoreInWindow) {
             // User has already taken this quiz. Return an empty list.
