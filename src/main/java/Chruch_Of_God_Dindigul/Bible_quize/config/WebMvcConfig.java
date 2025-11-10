@@ -15,13 +15,9 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Expose the 'uploads' directory to be accessible via '/uploads/**'
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadDir + "/");
-
-        // CRITICAL DEPLOYMENT FIX: Explicitly add the resource handler for static assets.
-        // Overriding addResourceHandlers disables Spring Boot's default static content handling.
-        // This configuration re-enables it, allowing index.html, JS, and CSS files to be served,
-        // which is the final step to resolving the frontend loading issues.
-        registry.addResourceHandler("/**")
-                .addResourceLocations("classpath:/static/");
+                .addResourceLocations("file:" + uploadDir + "/"); // This handler is correct and should remain.
+        // CRITICAL FIX: The "/**" resource handler has been removed. It was incorrectly
+        // intercepting all API calls and causing 404 errors. Spring Boot's default
+        // static content handling combined with the SpaController is the correct approach.
     }
 }
