@@ -63,31 +63,29 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     // --- PUBLIC ENDPOINTS (No Authentication Required) ---
                     auth
-                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight                        
-                        // CRITICAL FIX: Be specific about which auth endpoints are public.
-                        // Using a wildcard like "/api/auth/**" incorrectly exposed protected endpoints like "/api/auth/me".
+                        .requestMatchers(mvcMatcherBuilder.pattern(HttpMethod.OPTIONS, "/**")).permitAll() // Allow all CORS pre-flight
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/login")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/register")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/register-admin")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/setup-status")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/refresh")).permitAll()
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/auth/admin-forgot-password")).permitAll()
                         .requestMatchers(mvcMatcherBuilder.pattern("/api/content/**")).permitAll() // Allow public content
                         .requestMatchers(mvcMatcherBuilder.pattern("/uploads/**")).permitAll() // Allow access to uploaded files
                         .requestMatchers(mvcMatcherBuilder.pattern("/error")).permitAll()
+
+                        // --- SPA Frontend Routes & Assets ---
                         .requestMatchers(mvcMatcherBuilder.pattern("/")).permitAll()
-                        // CRITICAL FIX: Permit access to all static assets (HTML, JS, CSS, images, etc.).
-                        // This allows the browser to load the frontend application files without authentication.
-                        // This pattern matches common file extensions.
+                        // Permit access to all static assets (HTML, JS, CSS, images, etc.).
                         .requestMatchers(mvcMatcherBuilder.pattern("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}")).permitAll()
-                        // CRITICAL FIX: Allow all non-API, non-static file requests to be forwarded to the SPA.
+                        // Allow all non-API, non-static file requests to be forwarded to the SPA.
                         // This regex matches paths that do not contain a dot, preventing it from matching file requests (e.g., .css, .js).
-                        // This allows the SpaController to handle client-side routing.
                         .requestMatchers(mvcMatcherBuilder.pattern("/**/{path:[^\\.]*}")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
-                        // CRITICAL FIX: Use hasAuthority("ADMIN") instead of hasAuthority("ROLE_ADMIN").
-                        // The hasAuthority() method automatically adds the "ROLE_" prefix for the check.
-                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasAuthority("ADMIN")
+                        // CRITICAL FIX: Use hasRole("ADMIN"). This correctly checks for the "ROLE_ADMIN" authority
+                        // that is being set in the JWT, fixing the access denied error for all admin endpoints.
+                        .requestMatchers(mvcMatcherBuilder.pattern("/api/admin/**")).hasRole("ADMIN")
 
                         // --- AUTHENTICATED (ANY ROLE) ENDPOINTS ---
                         // Any other request that is not public or for admins must be authenticated.
