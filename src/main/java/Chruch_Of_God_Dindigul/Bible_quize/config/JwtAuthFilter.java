@@ -61,12 +61,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             new AntPathRequestMatcher("/api/content/**"),
             // --- Static Resources & File Uploads ---
             new AntPathRequestMatcher("/uploads/**"),
-            new AntPathRequestMatcher("/error") // Trailing comma removed from original if present
-            // --- SPA Frontend Routes & Assets ---
-            // CRITICAL FIX: The SPA routing patterns like "/**/{path:[^\\.]*}" have been removed.
-            // SecurityConfig is already configured to permitAll() for these page routes.
-            // The filter's only job is to process tokens for protected API routes, not to decide if a page is public.
-            // This resolves the 404 error on initial page load.
+            new AntPathRequestMatcher("/error"),
+            // CRITICAL DEPLOYMENT FIX: The filter must also ignore all frontend assets and page routes.
+            // This list must align with the public routes in SecurityConfig to prevent the filter
+            // from incorrectly blocking the initial page load. This resolves the 404 error.
+            new AntPathRequestMatcher("/"),
+            new AntPathRequestMatcher("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}"),
+            new AntPathRequestMatcher("/**/{path:[^\\.]*}")
     );
 
     @Override
