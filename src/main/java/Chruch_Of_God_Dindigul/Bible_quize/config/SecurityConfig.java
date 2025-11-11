@@ -80,7 +80,7 @@ public class SecurityConfig {
                         .requestMatchers(mvcMatcherBuilder.pattern("/**/*.{js,css,html,png,jpg,jpeg,gif,svg,ico}")).permitAll()
                         // Allow all non-API, non-static file requests to be forwarded to the SPA.
                         // This regex matches paths that do not contain a dot, preventing it from matching file requests (e.g., .css, .js).
-                        .requestMatchers(mvcMatcherBuilder.pattern("/**/{path:[^\\.]*}")).permitAll()
+                        // .requestMatchers(mvcMatcherBuilder.pattern("/**/{path:[^\\.]*}")).permitAll()
 
                         // --- ADMIN-ONLY ENDPOINTS ---
                         // CRITICAL FIX: Use hasRole("ADMIN"). This correctly checks for the "ROLE_ADMIN" authority
